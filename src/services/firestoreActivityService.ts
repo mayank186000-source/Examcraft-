@@ -1,3 +1,16 @@
+import { 
+  collection, 
+  addDoc, 
+  setDoc, 
+  doc, 
+  deleteDoc, 
+  getDocs, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  limit 
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { User } from '../types';
 import { 
   debugLogPaperGenerationPayload, 
@@ -76,7 +89,7 @@ export function saveActivityLocally(activity: StudentActivityDoc): void {
 }
 
 /**
- * Gather local activities from LocalStorage, including saved papers and quiz test results
+ * Gather local activities from LocalStorage
  */
 export function getLocalStudentActivities(): StudentActivityDoc[] {
   const map = new Map<string, StudentActivityDoc>();
@@ -191,15 +204,15 @@ export function mergeActivities(remote: StudentActivityDoc[], local: StudentActi
 }
 
 /**
- * Log a paper generation event
+ * Log a paper generation event directly to Firestore
  */
 export async function logPaperGenerationToFirestore(
   student: { id?: string; name?: string; email?: string },
   paper: { id: string; paperCode?: string; title: string; subjectName?: string; classLevel?: string; totalMarks?: number }
 ): Promise<string | null> {
-  const studentId = student.id || student.email || 'guest_student';
-  const studentName = student.name || 'Guest Student';
-  const studentEmail = student.email || 'guest@examidea.internal';
+  const studentEmail = (student.email || 'guest@examidea.internal').toLowerCase().trim();
+  const studentName = student.name || (studentEmail.includes('guest') ? 'Guest Student' : studentEmail.split('@')[0]);
+  const studentId = student.id || studentEmail;
   const paperCode = paper.paperCode || paper.id;
   const now = new Date().toISOString();
 
@@ -220,29 +233,21 @@ export async function logPaperGenerationToFirestore(
   saveActivityLocally(activityPayload);
   debugLogPaperGenerationPayload(student, paper, activityPayload);
 
-  // Sync with server API
+  // Write directly to Firestore
+  try {
+    if (db && db.app) {
+      await addDoc(collection(db, 'student_activities'), activityPayload);
+    }
+  } catch (e) {
+    console.warn('Firestore write activity warning:', e);
+  }
+
+  // Backup sync to server
   try {
     fetch('/api/activities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activity: activityPayload })
-    }).catch(() => {});
-
-    fetch('/api/download-logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        log: {
-          id: `log-${Date.now()}`,
-          paperTitle: paper.title || 'CBSE Model Question Paper',
-          subject: paper.subjectName || 'General CBSE',
-          paperCode,
-          timestamp: now,
-          userEmail: studentEmail,
-          userName: studentName,
-          userRole: 'student'
-        }
-      })
     }).catch(() => {});
   } catch {}
 
@@ -250,7 +255,7 @@ export async function logPaperGenerationToFirestore(
 }
 
 /**
- * Log a quiz submission event
+ * Log a quiz submission event directly to Firestore
  */
 export async function logQuizSubmissionToFirestore(
   student: { id?: string; name?: string; email?: string },
@@ -266,9 +271,9 @@ export async function logQuizSubmissionToFirestore(
     timeTakenSeconds: number;
   }
 ): Promise<string | null> {
-  const studentId = student.id || student.email || 'guest_student';
-  const studentName = student.name || 'Guest Student';
-  const studentEmail = student.email || 'guest@examidea.internal';
+  const studentEmail = (student.email || 'guest@examidea.internal').toLowerCase().trim();
+  const studentName = student.name || (studentEmail.includes('guest') ? 'Guest Student' : studentEmail.split('@')[0]);
+  const studentId = student.id || studentEmail;
   const paperCode = quiz.paperCode || quiz.paperId;
   const now = new Date().toISOString();
 
@@ -292,44 +297,228 @@ export async function logQuizSubmissionToFirestore(
   saveActivityLocally(activityPayload);
   debugLogQuizSubmissionPayload(student, quiz, activityPayload);
 
-  // Sync to backend server
+  const grammarResultPayload = {
+    code: paperCode,
+    topic: quiz.paperTitle || quiz.subjectName || 'Practice Test',
+    score: quiz.score,
+    total: quiz.totalMarks,
+    percentage: quiz.percentage,
+    timeTakenSeconds: quiz.timeTakenSeconds,
+    date: now,
+    userName: studentName,
+    userEmail: studentEmail,
+    classLevel: quiz.classLevel || '10'
+  };
+
+  syncGrammarResultToFirestore(grammarResultPayload);
+
+  // Write directly to Firestore
+  try {
+    if (db && db.app) {
+      await addDoc(collection(db, 'student_activities'), activityPayload);
+      await addDoc(collection(db, 'grammar_results'), grammarResultPayload);
+    }
+  } catch (e) {
+    console.warn('Firestore write quiz submission warning:', e);
+  }
+
+  // Backup sync to server
   try {
     fetch('/api/activities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activity: activityPayload })
     }).catch(() => {});
-
-    fetch('/api/grammar-results', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        result: {
-          code: paperCode,
-          topic: quiz.paperTitle || quiz.subjectName || 'Practice Test',
-          score: quiz.score,
-          total: quiz.totalMarks,
-          percentage: quiz.percentage,
-          timeTakenSeconds: quiz.timeTakenSeconds,
-          date: now,
-          userName: studentName,
-          userEmail: studentEmail,
-          classLevel: quiz.classLevel || '10'
-        }
-      })
-    }).catch(() => {});
   } catch {}
 
   return `quiz-${Date.now()}`;
 }
 
+/**
+ * Real-time subscription to student activities in Firestore
+ */
 export function subscribeToStudentActivities(
   callback: (activities: StudentActivityDoc[]) => void,
   maxRecords: number = 100
 ): () => void {
+  // First send local items immediately
   callback(getLocalStudentActivities());
-  fetchFirestoreActivities(maxRecords).then(activities => callback(activities)).catch(() => {});
-  return () => {};
+
+  if (!db || !db.app) return () => {};
+
+  try {
+    const q = query(
+      collection(db, 'student_activities'),
+      orderBy('timestamp', 'desc'),
+      limit(maxRecords)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const remoteList: StudentActivityDoc[] = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as StudentActivityDoc));
+
+        const localList = getLocalStudentActivities();
+        const merged = mergeActivities(remoteList, localList);
+        callback(merged);
+      },
+      (error) => {
+        console.warn('Firestore student_activities listener error, falling back:', error);
+        fetchFirestoreActivities(maxRecords).then(res => callback(res)).catch(() => {});
+      }
+    );
+
+    return unsubscribe;
+  } catch (e) {
+    console.warn('Failed to attach student_activities snapshot:', e);
+    return () => {};
+  }
+}
+
+/**
+ * Real-time subscription to Grammar Results in Firestore
+ */
+export function subscribeToGrammarResults(
+  callback: (results: any[]) => void
+): () => void {
+  try {
+    const raw = localStorage.getItem('examcraft_grammar_results');
+    callback(raw ? JSON.parse(raw) : []);
+  } catch {
+    callback([]);
+  }
+
+  if (!db || !db.app) return () => {};
+
+  try {
+    const q = query(collection(db, 'grammar_results'), limit(150));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const remoteResults = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const raw = localStorage.getItem('examcraft_grammar_results');
+        const localResults: any[] = raw ? JSON.parse(raw) : [];
+        const map = new Map<string, any>();
+        localResults.forEach(r => map.set(r.code, r));
+        remoteResults.forEach((r: any) => map.set(r.code, r));
+        const merged = Array.from(map.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+        try {
+          localStorage.setItem('examcraft_grammar_results', JSON.stringify(merged));
+        } catch {}
+        callback(merged);
+      },
+      (error) => {
+        console.warn('Firestore grammar_results listener error:', error);
+      }
+    );
+    return unsubscribe;
+  } catch (e) {
+    return () => {};
+  }
+}
+
+export async function fetchFirestoreActivities(maxRecords: number = 100): Promise<StudentActivityDoc[]> {
+  try {
+    if (db && db.app) {
+      const q = query(collection(db, 'student_activities'), orderBy('timestamp', 'desc'), limit(maxRecords));
+      const snap = await getDocs(q);
+      const remote = snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentActivityDoc));
+      const local = getLocalStudentActivities();
+      return mergeActivities(remote, local);
+    }
+  } catch (e) {
+    console.warn('Direct fetch firestore activities warning:', e);
+  }
+  return getLocalStudentActivities();
+}
+
+export async function logUserLoginToFirestore(
+  student: { id?: string; name?: string; email: string },
+  isNewRegistration: boolean = false
+): Promise<string | null> {
+  const studentEmail = student.email.toLowerCase().trim();
+  const studentName = student.name || studentEmail.split('@')[0];
+  const studentId = student.id || studentEmail;
+  const now = new Date().toISOString();
+
+  const activityPayload: StudentActivityDoc = {
+    studentId,
+    studentName,
+    studentEmail,
+    activityType: isNewRegistration ? 'user_registered' : 'user_login',
+    paperId: `AUTH-${Date.now()}`,
+    paperCode: `AUTH-${studentEmail.split('@')[0].toUpperCase()}`,
+    paperTitle: isNewRegistration ? 'New Student Registration' : 'Student Account Login',
+    subject: 'CBSE Portal Access',
+    classLevel: '10',
+    timestamp: now,
+  };
+
+  saveActivityLocally(activityPayload);
+
+  // Sync user record to Firestore
+  syncUserToFirestore({
+    id: studentId,
+    name: studentName,
+    email: studentEmail,
+    role: studentEmail === 'mukesh186000@gmail.com' ? 'admin' : 'student'
+  });
+
+  // Write login activity directly to Firestore
+  try {
+    if (db && db.app) {
+      await addDoc(collection(db, 'student_activities'), activityPayload);
+    }
+  } catch (e) {
+    console.warn('Firestore login log error:', e);
+  }
+
+  return `auth-${Date.now()}`;
+}
+
+export async function syncUserToFirestore(user: { id?: string; name?: string; email?: string; role?: string; photoURL?: string; dailyQuotaLimit?: number; dailyDownloadsUsed?: number; lastDownloadDate?: string; totalDownloads?: number; createdAt?: string }): Promise<void> {
+  if (!user || !user.email) return;
+  const rawEmail = user.email.toLowerCase().trim();
+  const rawName = user.name || (rawEmail.includes('guest') ? 'Guest Student' : rawEmail.split('@')[0]);
+
+  const updatedUser: User = {
+    id: user.id || `usr-${Date.now()}`,
+    name: rawName,
+    email: rawEmail,
+    role: (rawEmail === 'mukesh186000@gmail.com' ? 'admin' : (user.role || 'student')) as any,
+    photoURL: user.photoURL || '',
+    dailyQuotaLimit: user.dailyQuotaLimit ?? 5,
+    dailyDownloadsUsed: user.dailyDownloadsUsed ?? 0,
+    lastDownloadDate: user.lastDownloadDate || new Date().toISOString().split('T')[0],
+    totalDownloads: user.totalDownloads ?? 0,
+    createdAt: user.createdAt || new Date().toISOString()
+  };
+
+  // Sync locally
+  try {
+    const rawUsers = localStorage.getItem('examidea_all_users');
+    const list: User[] = rawUsers ? JSON.parse(rawUsers) : [];
+    const idx = list.findIndex(u => u.email.toLowerCase().trim() === rawEmail);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...updatedUser };
+    } else {
+      list.unshift(updatedUser);
+    }
+    localStorage.setItem('examidea_all_users', JSON.stringify(list));
+  } catch (e) {}
+
+  // Write directly to Firestore
+  try {
+    if (db && db.app) {
+      const docId = rawEmail.replace(/[^a-zA-Z0-9]/g, '_');
+      await setDoc(doc(db, 'users', docId), updatedUser, { merge: true });
+    }
+  } catch (e) {
+    console.warn('Firestore sync user error:', e);
+  }
 }
 
 export function subscribeToQuizSubmissions(
@@ -348,135 +537,34 @@ export function subscribeToGeneratedPaperLogs(
   return () => {};
 }
 
-export function subscribeToGrammarResults(
-  callback: (results: any[]) => void
-): () => void {
-  try {
-    const raw = localStorage.getItem('examcraft_grammar_results');
-    callback(raw ? JSON.parse(raw) : []);
-  } catch {
-    callback([]);
-  }
-  fetchFirestoreGrammarResults().then(res => callback(res)).catch(() => {});
-  return () => {};
-}
-
-export async function fetchFirestoreActivities(maxRecords: number = 100): Promise<StudentActivityDoc[]> {
-  try {
-    const resp = await fetch('/api/admin/all-data');
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.success && Array.isArray(data.activities)) {
-        const remoteActivities: StudentActivityDoc[] = data.activities;
-        const local = getLocalStudentActivities();
-        const merged = mergeActivities(remoteActivities, local);
-        try {
-          localStorage.setItem(LOCAL_ACTIVITIES_KEY, JSON.stringify(merged.slice(0, 300)));
-        } catch {}
-        return merged;
-      }
-    }
-  } catch (e) {
-    console.warn('Fetch server activities error:', e);
-  }
-  return getLocalStudentActivities();
-}
-
 export async function fetchFirestoreQuizSubmissions(maxRecords: number = 100): Promise<QuizSubmissionDoc[]> {
   return [];
 }
 
-export async function logUserLoginToFirestore(
-  student: { id?: string; name?: string; email: string },
-  isNewRegistration: boolean = false
-): Promise<string | null> {
-  const studentId = student.id || student.email;
-  const studentName = student.name || student.email.split('@')[0];
-  const studentEmail = student.email;
-  const now = new Date().toISOString();
-
-  const activityPayload: StudentActivityDoc = {
-    studentId,
-    studentName,
-    studentEmail,
-    activityType: isNewRegistration ? 'user_registered' : 'user_login',
-    paperId: `AUTH-${Date.now()}`,
-    paperCode: `AUTH-${studentEmail.split('@')[0].toUpperCase()}`,
-    paperTitle: isNewRegistration ? 'New Student Registration' : 'Student Account Login',
-    subject: 'CBSE Portal Access',
-    classLevel: '10',
-    timestamp: now,
-  };
-
-  saveActivityLocally(activityPayload);
-
-  // Sync with backend server
+export async function fetchFirestoreGrammarResults(): Promise<any[]> {
   try {
-    fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activity: activityPayload })
-    }).catch(() => {});
-
-    fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user: {
-          id: studentId,
-          name: studentName,
-          email: studentEmail,
-          role: studentEmail === 'mukesh186000@gmail.com' ? 'admin' : 'student',
-          lastDownloadDate: new Date().toISOString().split('T')[0]
-        }
-      })
-    }).catch(() => {});
-  } catch {}
-
-  return `auth-${Date.now()}`;
-}
-
-export async function syncUserToFirestore(user: { id?: string; name?: string; email?: string; role?: string; photoURL?: string; dailyQuotaLimit?: number; dailyDownloadsUsed?: number; lastDownloadDate?: string; totalDownloads?: number; createdAt?: string }): Promise<void> {
-  if (!user) return;
-  const rawEmail = (user.email || 'guest@examcraft.internal').toLowerCase().trim();
-  const rawName = user.name || (rawEmail.includes('guest') ? 'Guest Student (Guest)' : rawEmail.split('@')[0]);
-
-  const updatedUser: User = {
-    id: user.id || `usr-${Date.now()}`,
-    name: rawName,
-    email: rawEmail,
-    role: (rawEmail === 'mukesh186000@gmail.com' ? 'admin' : (user.role || 'student')) as any,
-    photoURL: user.photoURL || '',
-    dailyQuotaLimit: user.dailyQuotaLimit ?? 5,
-    dailyDownloadsUsed: user.dailyDownloadsUsed ?? 0,
-    lastDownloadDate: user.lastDownloadDate || new Date().toISOString().split('T')[0],
-    totalDownloads: user.totalDownloads ?? 0,
-    createdAt: user.createdAt || new Date().toISOString()
-  };
-
-  // Sync to local user list
-  try {
-    const rawUsers = localStorage.getItem('examidea_all_users');
-    const list: User[] = rawUsers ? JSON.parse(rawUsers) : [];
-    const idx = list.findIndex(u => u.email.toLowerCase().trim() === rawEmail);
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], ...updatedUser };
-    } else {
-      list.unshift(updatedUser);
+    if (db && db.app) {
+      const snap = await getDocs(query(collection(db, 'grammar_results'), limit(150)));
+      const remoteResults = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const raw = localStorage.getItem('examcraft_grammar_results');
+      const localResults: any[] = raw ? JSON.parse(raw) : [];
+      const map = new Map<string, any>();
+      localResults.forEach(r => map.set(r.code, r));
+      remoteResults.forEach((r: any) => map.set(r.code, r));
+      const merged = Array.from(map.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+      try {
+        localStorage.setItem('examcraft_grammar_results', JSON.stringify(merged));
+      } catch {}
+      return merged;
     }
-    localStorage.setItem('examidea_all_users', JSON.stringify(list));
-  } catch (e) {
-    console.warn('Sync user locally warning:', e);
-  }
-
-  // Also sync to server endpoint
-  try {
-    fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: updatedUser })
-    }).catch(() => {});
   } catch (e) {}
+
+  try {
+    const raw = localStorage.getItem('examcraft_grammar_results');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function syncGrammarResultToFirestore(result: any): Promise<void> {
@@ -489,40 +577,12 @@ export async function syncGrammarResultToFirestore(result: any): Promise<void> {
     else list.unshift(result);
     localStorage.setItem('examcraft_grammar_results', JSON.stringify(list));
 
-    fetch('/api/grammar-results', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ result })
-    }).catch(() => {});
-  } catch (e) {}
-}
-
-export async function fetchFirestoreGrammarResults(): Promise<any[]> {
-  try {
-    const resp = await fetch('/api/admin/all-data');
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.success && Array.isArray(data.grammarResults)) {
-        const remoteResults = data.grammarResults;
-        const raw = localStorage.getItem('examcraft_grammar_results');
-        const localResults: any[] = raw ? JSON.parse(raw) : [];
-        const map = new Map<string, any>();
-        localResults.forEach(r => map.set(r.code, r));
-        remoteResults.forEach((r: any) => map.set(r.code, r));
-        const merged = Array.from(map.values()).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-        try {
-          localStorage.setItem('examcraft_grammar_results', JSON.stringify(merged));
-        } catch {}
-        return merged;
-      }
+    if (db && db.app) {
+      const docId = result.code.replace(/[^a-zA-Z0-9]/g, '_');
+      await setDoc(doc(db, 'grammar_results', docId), result, { merge: true });
     }
-  } catch {}
-
-  try {
-    const raw = localStorage.getItem('examcraft_grammar_results');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
+  } catch (e) {
+    console.warn('Firestore sync grammar result error:', e);
   }
 }
 
@@ -535,17 +595,15 @@ export function subscribeToFirestoreUsers(
   } catch {
     callback([]);
   }
-  fetchFirestoreUsers().then(users => callback(users)).catch(() => {});
-  return () => {};
-}
 
-export async function fetchFirestoreUsers(): Promise<User[]> {
+  if (!db || !db.app) return () => {};
+
   try {
-    const resp = await fetch('/api/admin/all-data');
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.success && Array.isArray(data.users)) {
-        const remoteUsers: User[] = data.users;
+    const q = query(collection(db, 'users'), limit(200));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const remoteUsers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as User));
         const raw = localStorage.getItem('examidea_all_users');
         const localUsers: User[] = raw ? JSON.parse(raw) : [];
         const map = new Map<string, User>();
@@ -561,12 +619,37 @@ export async function fetchFirestoreUsers(): Promise<User[]> {
         try {
           localStorage.setItem('examidea_all_users', JSON.stringify(merged));
         } catch {}
-        return merged;
+        callback(merged);
+      },
+      (error) => {
+        console.warn('Firestore users listener error:', error);
       }
-    }
+    );
+    return unsubscribe;
   } catch (e) {
-    console.warn('Fetch server users warning:', e);
+    return () => {};
   }
+}
+
+export async function fetchFirestoreUsers(): Promise<User[]> {
+  try {
+    if (db && db.app) {
+      const snap = await getDocs(query(collection(db, 'users'), limit(200)));
+      const remoteUsers = snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+      const raw = localStorage.getItem('examidea_all_users');
+      const localUsers: User[] = raw ? JSON.parse(raw) : [];
+      const map = new Map<string, User>();
+      localUsers.forEach(u => {
+        const key = (u.email || u.id || u.name || '').toLowerCase().trim();
+        if (key) map.set(key, u);
+      });
+      remoteUsers.forEach(u => {
+        const key = (u.email || u.id || u.name || '').toLowerCase().trim();
+        if (key) map.set(key, u);
+      });
+      return Array.from(map.values());
+    }
+  } catch (e) {}
 
   try {
     const raw = localStorage.getItem('examidea_all_users');
@@ -578,20 +661,27 @@ export async function fetchFirestoreUsers(): Promise<User[]> {
 
 export async function deleteUserFromFirestore(userIdOrEmail: string): Promise<void> {
   if (!userIdOrEmail) return;
+  const target = userIdOrEmail.toLowerCase().trim();
+
+  // Local filter
   try {
-    const target = userIdOrEmail.toLowerCase().trim();
     const raw = localStorage.getItem('examidea_all_users');
     if (raw) {
       const list: User[] = JSON.parse(raw);
       const filtered = list.filter(u => (u.id || '').toLowerCase() !== target && (u.email || '').toLowerCase() !== target);
       localStorage.setItem('examidea_all_users', JSON.stringify(filtered));
     }
-    fetch('/api/users/deregister', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: target })
-    }).catch(() => {});
   } catch (e) {}
+
+  // Delete from Firestore
+  try {
+    if (db && db.app) {
+      const docId = target.replace(/[^a-zA-Z0-9]/g, '_');
+      await deleteDoc(doc(doc(db, 'users'), docId));
+    }
+  } catch (e) {
+    console.warn('Delete user from firestore error:', e);
+  }
 }
 
 export function deleteUser(userIdOrEmail: string): void {

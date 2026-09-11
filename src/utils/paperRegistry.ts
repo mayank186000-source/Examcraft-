@@ -29,19 +29,20 @@ export function savePaperToRegistry(paper: GeneratedPaper, user?: { email: strin
     const existing = getAllSavedPapersMap();
     const cleanCode = normalizePaperCode(paper.paperCode || paper.id);
     let creator = paper.generatedBy || user;
-    if (!creator) {
+    if (!creator || creator.email === 'guest@examcraft.internal') {
       try {
-        const savedUserStr = localStorage.getItem('examidea_current_user');
+        const savedUserStr = localStorage.getItem('examidea_current_user') || localStorage.getItem('examcraft_auth_user');
         if (savedUserStr) {
           const parsed = JSON.parse(savedUserStr);
-          if (parsed && parsed.email) {
-            creator = { email: parsed.email, name: parsed.name || parsed.email.split('@')[0] };
+          if (parsed && (parsed.email || parsed.userEmail)) {
+            const em = parsed.email || parsed.userEmail;
+            creator = { email: em, name: parsed.name || parsed.displayName || em.split('@')[0] };
           }
         }
       } catch {}
     }
     if (!creator) {
-      creator = { email: 'guest@examcraft.internal', name: 'Guest User (Guest)' };
+      creator = { email: 'guest@examidea.internal', name: 'Guest Student' };
     }
     const fullPaper = {
       ...paper,

@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "StudentActivity": {
+      "title": "Student Activity",
+      "description": "Log of student activities across devices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "activityType": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "GrammarResult": {
+      "title": "Grammar Test Result",
+      "description": "Kids grammar test submissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "testCode": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "score": { "type": "number" },
+        "total": { "type": "number" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profiles and roles",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/student_activities/{activityId}": {
+      "schema": "StudentActivity",
+      "description": "Logs of all student actions"
+    },
+    "/grammar_results/{resultId}": {
+      "schema": "GrammarResult",
+      "description": "Logs of student grammar test attempts"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile records"
+    }
+  }
+}

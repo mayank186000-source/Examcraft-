@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { User, UserRole, DownloadRecord } from '../types';
 import {
   syncUserToFirestore,
@@ -131,7 +133,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('examidea_current_user');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) return parsed;
+      }
     } catch {
       // Fallback
     }
@@ -385,7 +390,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unlimitedVipEmails.some(vip => vip.trim().toLowerCase() === normalized);
   };
 
-  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
   const loginWithGoogle = async (
     customEmail?: string,
@@ -396,26 +401,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let nameToUse = customName;
     let photoToUse = customPhoto;
 
-    if (emailToUse) {
-      if (!EMAIL_REGEX.test(emailToUse)) {
-        throw new Error('कृपया एक वैध ईमेल आईडी दर्ज करें (Please enter a valid email address, e.g. student@gmail.com).');
-      }
-    } else {
-      if (!emailToUse) {
-        const fallbackEmail = window.prompt(
-          'Please enter your Email / Gmail ID to log in instantly (उदा. student@gmail.com):',
-          ''
-        );
-        if (fallbackEmail && EMAIL_REGEX.test(fallbackEmail.trim().toLowerCase())) {
-          emailToUse = fallbackEmail.trim().toLowerCase();
-        } else {
-          throw new Error('कृपया अपनी Gmail/Email ID लिखकर साइन इन करें।');
+    // 1. If no custom email provided, attempt real Firebase Google Auth Popup
+    if (!emailToUse) {
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, provider);
+        if (result.user && result.user.email) {
+          emailToUse = result.user.email.toLowerCase().trim();
+          nameToUse = result.user.displayName || nameToUse;
+          photoToUse = result.user.photoURL || photoToUse;
+        }
+      } catch (popupErr: any) {
+        console.warn('Firebase signInWithPopup warning/fallback:', popupErr);
+        if (popupErr?.code === 'auth/popup-closed-by-user') {
+          throw new Error('Google Sign-In popup बंद कर दिया गया। (Sign-In popup was closed)');
         }
       }
     }
 
+    // 2. Strict Email Validation check
     if (!emailToUse || !EMAIL_REGEX.test(emailToUse)) {
-      throw new Error('कृपया एक वैध ईमेल आईडी (Valid Email ID) दर्ज करें (उदा. user@gmail.com)।');
+      throw new Error('कृपया एक सही एवं वैध ईमेल आईडी दर्ज करें (Please enter a valid email ID, e.g. student@gmail.com)।');
+    }
+
+    // Block obvious dummy emails like abc@abc.com, test@test.com, a@b.c
+    const domain = emailToUse.split('@')[1] || '';
+    if (domain.length < 4 || !domain.includes('.')) {
+      throw new Error('कृपया अपनी सही Gmail/Google ID (e.g. user@gmail.com) से लॉग इन करें।');
     }
 
     const normalizedEmail = emailToUse;
@@ -532,6 +545,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setCurrentUser(null);
+    try {
+      localStorage.removeItem('examidea_current_user');
+      localStorage.removeItem('examcraft_auth_user');
+    } catch {}
   };
 
   const canDownload = (): CanDownloadResult => {

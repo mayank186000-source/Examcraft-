@@ -679,7 +679,11 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           m5: { q: `(a) Write the chemical formula and calculate molecular mass of: (i) Aluminium sulphate (ii) Calcium carbonate (Al=27, S=32, O=16, Ca=40, C=12).\n(b) State the Postulates of Dalton's Atomic Theory and mention one limitation.`, a: `(a) (i) Al2(SO4)3: 2(27) + 3(32 + 64) = 54 + 288 = 342 u. (ii) CaCO3: 40 + 12 + 48 = 100 u.\n(b) Postulates: Matter consists of indivisible atoms; atoms of same element are identical; compounds formed by combining whole number atoms. Limitation: Discovery of subatomic particles (electrons, protons) showed atoms are divisible.`, ch: "Atoms and Molecules" }
         }
       ];
-      const item = c9SciBank[globalCounter % c9SciBank.length];
+      const findUnusedC9Sci = c9SciBank.find(it => {
+        const qText = defaultMarks === 1 ? it.m1.q : defaultMarks === 2 ? it.m2.q : defaultMarks === 3 ? it.m3.q : it.m5.q;
+        return !usedHashes.has(hashQuestionText(qText));
+      }) || c9SciBank[globalCounter % c9SciBank.length];
+      const item = findUnusedC9Sci;
       if (defaultMarks === 1) { dynText = item.m1.q; dynOpts = item.m1.opts; dynAns = item.m1.a; dynCh = item.m1.ch; }
       else if (defaultMarks === 2) { dynText = item.m2.q; dynAns = item.m2.a; dynCh = item.m2.ch; }
       else if (defaultMarks === 3) { dynText = item.m3.q; dynAns = item.m3.a; dynCh = item.m3.ch; }
@@ -695,7 +699,11 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           m5: { q: `(a) Factorize completely using factor theorem: x³ - 6x² + 11x - 6.\n(b) Using Heron's formula, find the area of an isosceles triangle whose perimeter is 32 cm and base is 12 cm.`, a: `(a) P(1) = 1 - 6 + 11 - 6 = 0 => (x - 1) is a factor. Dividing gives x² - 5x + 6 = (x - 2)(x - 3). Factors: (x - 1)(x - 2)(x - 3).\n(b) Equal sides a = (32 - 12)/2 = 10 cm. s = 16 cm. Area = √[16(16-10)(16-10)(16-12)] = √[16 × 6 × 6 × 4] = 4 × 6 × 2 = 48 cm².`, ch: "Heron's Formula" }
         }
       ];
-      const item = c9MathBank[globalCounter % c9MathBank.length];
+      const findUnusedC9Math = c9MathBank.find(it => {
+        const qText = defaultMarks === 1 ? it.m1.q : defaultMarks === 2 ? it.m2.q : defaultMarks === 3 ? it.m3.q : it.m5.q;
+        return !usedHashes.has(hashQuestionText(qText));
+      }) || c9MathBank[globalCounter % c9MathBank.length];
+      const item = findUnusedC9Math;
       if (defaultMarks === 1) { dynText = item.m1.q; dynOpts = item.m1.opts; dynAns = item.m1.a; dynCh = item.m1.ch; }
       else if (defaultMarks === 2) { dynText = item.m2.q; dynAns = item.m2.a; dynCh = item.m2.ch; }
       else if (defaultMarks === 3) { dynText = item.m3.q; dynAns = item.m3.a; dynCh = item.m3.ch; }
@@ -711,7 +719,11 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           m5: { q: `(a) Derive Lens Maker's Formula: 1/f = (μ - 1)(1/R₁ - 1/R₂) for a thin double convex lens.\n(b) In Young's Double Slit Experiment, the slits are separated by 0.28 mm and screen is at 1.4 m. If wavelength λ = 600 nm, calculate the fringe width.`, a: `(a) Refraction at spherical interfaces: μ₂/v₁ - μ₁/u = (μ₂-μ₁)/R₁ and μ₁/v - μ₂/v₁ = (μ₁-μ₂)/R₂. Adding yields 1/v - 1/u = (μ-1)(1/R₁ - 1/R₂) => 1/f = (μ-1)(1/R₁ - 1/R₂).\n(b) Fringe width β = λD / d = (600 × 10⁻⁹ × 1.4) / (0.28 × 10⁻³) = 3.0 × 10⁻³ m = 3 mm.`, ch: "Wave Optics" }
         }
       ];
-      const item = c12PhyBank[globalCounter % c12PhyBank.length];
+      const findUnusedC12Phy = c12PhyBank.find(it => {
+        const qText = defaultMarks === 1 ? it.m1.q : defaultMarks === 2 ? it.m2.q : defaultMarks === 3 ? it.m3.q : it.m5.q;
+        return !usedHashes.has(hashQuestionText(qText));
+      }) || c12PhyBank[globalCounter % c12PhyBank.length];
+      const item = findUnusedC12Phy;
       if (defaultMarks === 1) { dynText = item.m1.q; dynOpts = item.m1.opts; dynAns = item.m1.a; dynCh = item.m1.ch; }
       else if (defaultMarks === 2) { dynText = item.m2.q; dynAns = item.m2.a; dynCh = item.m2.ch; }
       else if (defaultMarks === 3) { dynText = item.m3.q; dynAns = item.m3.a; dynCh = item.m3.ch; }
@@ -727,7 +739,11 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           m5: { q: `(a) Solve the following problem regarding mechanism of nucleophilic substitution SN1 and SN2 reactions in haloalkanes with stereochemical outcomes.\n(b) Write short notes with chemical equations: (i) Reimer-Tiemann reaction (ii) Cannizzaro reaction.`, a: `(a) SN1: Two-step carbocation intermediate mechanism, 1st order kinetics, racemization. SN2: Single-step concerted backside attack, 2nd order kinetics, Walden inversion.\n(b) (i) Phenol + CHCl3 + 3NaOH (340K) -> Salicylaldehyde + 3NaCl + 2H2O. (ii) Formaldehyde (HCHO) + conc. NaOH -> Methanol (CH3OH) + Sodium formate (HCOONa).`, ch: "Aldehydes, Ketones and Carboxylic Acids" }
         }
       ];
-      const item = c12ChemBank[globalCounter % c12ChemBank.length];
+      const findUnusedC12Chem = c12ChemBank.find(it => {
+        const qText = defaultMarks === 1 ? it.m1.q : defaultMarks === 2 ? it.m2.q : defaultMarks === 3 ? it.m3.q : it.m5.q;
+        return !usedHashes.has(hashQuestionText(qText));
+      }) || c12ChemBank[globalCounter % c12ChemBank.length];
+      const item = findUnusedC12Chem;
       if (defaultMarks === 1) { dynText = item.m1.q; dynOpts = item.m1.opts; dynAns = item.m1.a; dynCh = item.m1.ch; }
       else if (defaultMarks === 2) { dynText = item.m2.q; dynAns = item.m2.a; dynCh = item.m2.ch; }
       else if (defaultMarks === 3) { dynText = item.m3.q; dynAns = item.m3.a; dynCh = item.m3.ch; }
@@ -743,7 +759,11 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           m5: { q: `(a) Find the shortest distance between the skew lines: r = (i + 2j + k) + λ(i - j + k) and r = (2i - j - k) + μ(2i + j + 2k).\n(b) Solve the linear programming problem (LPP) graphically: Maximize Z = 4x + y subject to constraints x + y ≤ 50, 3x + y ≤ 90, x ≥ 0, y ≥ 0.`, a: `(a) SD = |(a2 - a1) · (b1 × b2)| / |b1 × b2|. Calculation yields shortest distance = 3/√19 units.\n(b) Corner points: (0,0) -> Z=0; (30,0) -> Z=120; (20,30) -> Z=110; (0,50) -> Z=50. Maximum Z = 120 at (30, 0).`, ch: "Three Dimensional Geometry" }
         }
       ];
-      const item = c12MathBank[globalCounter % c12MathBank.length];
+      const findUnusedC12Math = c12MathBank.find(it => {
+        const qText = defaultMarks === 1 ? it.m1.q : defaultMarks === 2 ? it.m2.q : defaultMarks === 3 ? it.m3.q : it.m5.q;
+        return !usedHashes.has(hashQuestionText(qText));
+      }) || c12MathBank[globalCounter % c12MathBank.length];
+      const item = findUnusedC12Math;
       if (defaultMarks === 1) { dynText = item.m1.q; dynOpts = item.m1.opts; dynAns = item.m1.a; dynCh = item.m1.ch; }
       else if (defaultMarks === 2) { dynText = item.m2.q; dynAns = item.m2.a; dynCh = item.m2.ch; }
       else if (defaultMarks === 3) { dynText = item.m3.q; dynAns = item.m3.a; dynCh = item.m3.ch; }
@@ -819,7 +839,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           { q: "In 'A Letter to God', why did Lencho compare large raindrops to new silver coins?", opts: ["A) They promised a rich corn harvest and economic prosperity", "B) They looked shiny", "C) He collected coins from the sky", "D) It was a metaphor for hail"], ans: "A) They promised a rich corn harvest and economic prosperity", ch: "First Flight: A Letter to God" },
           { q: "Select the correct modal auxiliary: 'Citizens ______ preserve national heritage and historical monuments.'", opts: ["A) ought to", "B) might", "C) could", "D) would"], ans: "A) ought to", ch: "Grammar: Modals" }
         ];
-        const pick = eng1M[globalCounter % eng1M.length];
+        const pick = eng1M.find(it => !usedHashes.has(hashQuestionText(it.q))) || eng1M[globalCounter % eng1M.length];
         dynText = pick.q;
         dynOpts = pick.opts;
         dynAns = pick.ans;
@@ -830,7 +850,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           { q: "How did Hari Singh justify stealing money from Anil despite Anil's immense kindness?", a: "Hari rationalized that Anil was careless with money and would waste it on his friends anyway, and if Hari didn't take it, someone else would.", ch: "Footprints without Feet: The Thief's Story" },
           { q: "Correct the sentence and state the grammatical rule: 'Neither the teacher nor the students was present in the laboratory.'", a: "Correction: Replace 'was' with 'were'.\nRule: When subjects are joined by 'neither...nor', the verb agrees with the nearer subject ('students').", ch: "Grammar: Subject-Verb Agreement" }
         ];
-        const pick = eng2M[globalCounter % eng2M.length];
+        const pick = eng2M.find(it => !usedHashes.has(hashQuestionText(it.q))) || eng2M[globalCounter % eng2M.length];
         dynText = pick.q;
         dynAns = pick.a;
         dynCh = pick.ch;
@@ -840,13 +860,13 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           { q: "How did Valli meticulously plan and execute her first solo bus ride to the nearby town in 'Madam Rides the Bus'?", a: "Valli listened to regular bus passengers, calculated total fare (60 paise) and duration (45 mins each way), and saved every coin by sacrificing candies, toys, and joy rides.", ch: "First Flight: Madam Rides the Bus" },
           { q: "What profound realization did Kisa Gotami arrive at after failing to procure mustard seeds from a death-free house?", a: "She realized that grief is universal, human life is brief and fragile, and death is the inescapable common destiny of all living beings.", ch: "First Flight: The Sermon at Benares" }
         ];
-        const pick = eng3M[globalCounter % eng3M.length];
+        const pick = eng3M.find(it => !usedHashes.has(hashQuestionText(it.q))) || eng3M[globalCounter % eng3M.length];
         dynText = pick.q;
         dynAns = pick.a;
         dynCh = pick.ch;
       } else if (defaultMarks === 4) {
-        dynPassage = "Deep reading of literary works strengthens neural connectivity in the brain's left temporal cortex, enhancing vocabulary, empathy, and concentration. Educational psychologists highlight that dedicating 20 minutes a day to undisturbed reading reduces stress hormones by 68% and elevates analytical reasoning in secondary school learners.";
-        dynText = "Q1. Which part of the brain is stimulated by deep reading and what function does it serve? (1M)\nQ2. State two distinct emotional and cognitive advantages of reading for 20 minutes daily. (2M)\nQ3. Find a word in the passage that means 'pertaining to the nervous system'. (1M)";
+        dynPassage = `Deep reading of literary works strengthens neural connectivity in the brain's left temporal cortex, enhancing vocabulary, empathy, and concentration (Set #${globalCounter + 1}). Educational psychologists highlight that dedicating 20 minutes a day to undisturbed reading reduces stress hormones by 68% and elevates analytical reasoning in secondary school learners.`;
+        dynText = `Q1. Which part of the brain is stimulated by deep reading and what function does it serve? (1M)\nQ2. State two distinct emotional and cognitive advantages of reading for 20 minutes daily. (2M)\nQ3. Find a word in the passage that means 'pertaining to the nervous system'. (1M)`;
         dynAns = "Q1. The left temporal cortex, responsible for language reception and empathy.\nQ2. (i) Reduces cortisol stress hormones by 68%. (ii) Elevates analytical problem solving and vocabulary.\nQ3. 'Neural'.";
         dynCh = "Reading Comprehension: Discursive Passage";
       } else {
@@ -855,7 +875,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           { q: "SECTION B: CREATIVE WRITING SKILLS - ANALYTICAL PARAGRAPH (5 MARKS)\n\nThe chart below outlines the preferred preparation modes of CBSE Class 10 students:\n• Interactive Question Banks & AI Mock Tests: 45%\n• NCERT Textbooks & Reference Guides: 35%\n• Group Peer Discussions: 20%\n\nWrite an analytical paragraph (100–120 words) interpreting the data, comparing trends, and drawing a valid conclusion.", a: "Analytical interpretation: Digital AI-driven practice leads at 45%, followed by foundational NCERT self-study at 35%, and peer discussions at 20%. Conclude that a blended approach yields the highest academic retention.", ch: "Writing Skills: Analytical Paragraph" },
           { q: "Nelson Mandela states: 'The brave man is not he who does not feel afraid, but he who conquers that fear.' Justify this statement with reference to Mandela's lifelong struggle against apartheid.", a: "Mandela witnessed countless comrades sacrifice their lives without breaking. He learned that courage was the conscious mastery over fear. Despite decades in prison, he refused to let hatred dictate his actions.", ch: "First Flight: Long Walk to Freedom" }
         ];
-        const pick = eng5M[globalCounter % eng5M.length];
+        const pick = eng5M.find(it => !usedHashes.has(hashQuestionText(it.q))) || eng5M[globalCounter % eng5M.length];
         dynText = pick.q;
         dynAns = pick.a;
         dynCh = pick.ch;
@@ -864,7 +884,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
       const bank = SOCIAL_MCQ_BANK;
       const questions = bank[defaultMarks] || bank[1];
       if (bank && questions) {
-        const item = questions[Math.floor(Math.random() * questions.length)];
+        const item = questions.find(it => !usedHashes.has(hashQuestionText(it.q))) || questions[Math.floor(Math.random() * questions.length)];
         dynText = item.q;
         dynOpts = item.opts;
         dynAns = item.ans;
@@ -882,7 +902,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           { q: "आपके विद्यालय में आयोजित होने वाले ‘स्वच्छता अभियान’ में छात्रों की भागीदारी हेतु एक आकर्षक सूचना तैयार कीजिए।", a: "सूचना लेखन: विद्यालय का नाम, 'सूचना', विषय, दिनांक, विवरण और हस्ताक्षर।", ch: "रचनात्मक लेखन: सूचना लेखन" },
           { q: "‘डायरी का एक पन्ना’ के माध्यम से स्पष्ट कीजिए कि स्वतंत्रता आंदोलन में कलकत्ता वासियों का क्या योगदान था?", a: "26 जनवरी 1931 को पुलिस की लाठियों के बावजूद लोगों ने झंडोत्सव मनाया और जुलूस निकाला।", ch: "स्पर्श: डायरी का एक पन्ना" }
         ];
-        const pick = hinBTopics[globalCounter % hinBTopics.length];
+        const pick = hinBTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || hinBTopics[globalCounter % hinBTopics.length];
         dynText = pick.q;
         dynAns = pick.a;
         dynCh = pick.ch;
@@ -891,7 +911,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           { q: "‘नेताजी का चश्मा’ पाठ में कैप्टन चश्मेवाले के माध्यम से लेखक ने किस भावना को व्यक्त किया है?", a: "कैप्टन के माध्यम से लेखक ने देश के उन अनगिनत नागरिकों के प्रति सम्मान और देशभक्ति प्रकट की है जो देश निर्माण में योगदान देते हैं।", ch: "नेताजी का चश्मा" },
           { q: "‘बालगोबिन भगत’ के गायन और चरित्र की मुख्य विशेषताएँ अपने शब्दों में लिखिए।", a: "बालगोबिन भगत कबीर को साहब मानते थे, वे गृहस्थ होकर भी सच्चे साधु थे और सत्य तथा निष्ठा के प्रतीक थे।", ch: "बालगोबिन भगत" }
         ];
-        const pick = hinATopics[globalCounter % hinATopics.length];
+        const pick = hinATopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || hinATopics[globalCounter % hinATopics.length];
         dynText = pick.q;
         dynAns = pick.a;
         dynCh = pick.ch;
@@ -903,7 +923,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "What are Accounting Ratios? Distinguish between Liquidity, Solvency, and Profitability ratios.", a: "Liquidity ratios (Current/Quick ratio) measure short-term solvency. Solvency ratios (Debt-Equity) measure long-term solvency. Profitability ratios measure earning capacity.", ch: "Financial Statement Analysis" },
         { q: "Discuss the forfeiture and reissue of shares issued at premium or discount in Company Accounts.", a: "Shares forfeited reduce subscribed capital. Amount already received on forfeited shares is transferred to Share Forfeiture Account. Reissue discount cannot exceed forfeiture balance.", ch: "Company Accounts" }
       ];
-      const pick = accTopics[globalCounter % accTopics.length];
+      const pick = accTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || accTopics[globalCounter % accTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -913,7 +933,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "Explain the role of Financial Management and Capital Structure decisions in an enterprise.", a: "Financial management aims at wealth maximization. Capital structure balances debt and equity considering cost of capital, risk, and cash flow position.", ch: "Financial Management" },
         { q: "Analyze the four elements of Marketing Mix (Product, Price, Place, Promotion) in consumer goods marketing.", a: "Product design, pricing strategies, distribution channels, and promotional tools work together to satisfy customer needs and achieve business objectives.", ch: "Marketing Management" }
       ];
-      const pick = bstTopics[globalCounter % bstTopics.length];
+      const pick = bstTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || bstTopics[globalCounter % bstTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -924,7 +944,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "Explain the determination of Equilibrium National Income and the concept of Investment Multiplier (K = 1 / (1 - MPC)).", a: "Equilibrium occurs when Aggregate Demand equals Aggregate Supply (AD = AS) or Savings equals Investment (S = I). Multiplier K = 1 / (1 - MPC).", ch: "National Income Accounting" },
         { q: "Discuss the credit control functions of Central Bank (RBI) using Repo Rate, CRR, and Open Market Operations.", a: "RBI controls credit using Repo Rate, Reverse Repo Rate, CRR, SLR, and Open Market Operations to curb inflation or boost liquidity.", ch: "Money and Banking" }
       ];
-      const pick = ecoTopics[globalCounter % ecoTopics.length];
+      const pick = ecoTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || ecoTopics[globalCounter % ecoTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -933,7 +953,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "Critically examine the main features of urban town planning, drainage systems, and social structures in the Harappan Civilisation.", a: "Grid pattern roads, burnt brick houses, sophisticated drainage system, citadel, granaries, and specialized crafts.", ch: "Bricks, Beads and Bones" },
         { q: "Examine the social, economic, and political significance of the Non-Cooperation Movement led by Mahatma Gandhi.", a: "Boycott of British institutions, foreign cloth, mass mobilization of peasants and workers, and national awakening.", ch: "Mahatma Gandhi and National Movement" }
       ];
-      const pick = histTopics[globalCounter % histTopics.length];
+      const pick = histTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || histTopics[globalCounter % histTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -942,7 +962,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "Explain the role and constitutional significance of Fundamental Rights and Directive Principles of State Policy in India.", a: "Fundamental Rights guarantee civil liberties; DPSP guide state policies for socio-economic justice.", ch: "Indian Constitution" },
         { q: "Analyze the key objectives, structure, and challenges of the United Nations in maintaining global peace and security.", a: "UN General Assembly, Security Council, peace-keeping operations, and challenges in reform.", ch: "International Organisations" }
       ];
-      const pick = polTopics[globalCounter % polTopics.length];
+      const pick = polTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || polTopics[globalCounter % polTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -951,7 +971,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "Explain the factors influencing the spatial distribution of population and urbanization in India.", a: "Physical factors (relief, climate, water), economic factors (minerals, industrialization), and socio-cultural factors.", ch: "Population Distribution" },
         { q: "Distinguish between Conventional and Non-Conventional sources of energy in India with suitable examples.", a: "Conventional: Coal, petroleum (exhaustible, polluting). Non-conventional: Solar, wind, geothermal (renewable, clean).", ch: "Mineral and Energy Resources" }
       ];
-      const pick = geoTopics[globalCounter % geoTopics.length];
+      const pick = geoTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || geoTopics[globalCounter % geoTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -960,7 +980,7 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
         { q: "Distinguish between Caste System and Class System as forms of social stratification in Indian society.", a: "Caste is closed, hereditary, and based on ritual purity. Class is open, fluid, and based on economic status and wealth.", ch: "Social Institutions" },
         { q: "Explain the concept of 'Sanskritisation' introduced by M.N. Srinivas and its role in social mobility.", a: "Process by which lower caste adopts customs, rituals, and lifestyle of higher dominant caste to seek upward mobility.", ch: "Social Change" }
       ];
-      const pick = socTopics[globalCounter % socTopics.length];
+      const pick = socTopics.find(it => !usedHashes.has(hashQuestionText(it.q))) || socTopics[globalCounter % socTopics.length];
       dynText = pick.q;
       dynAns = pick.a;
       dynCh = pick.ch;
@@ -977,6 +997,9 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
     }
   }
 
+    if (usedHashes.has(hashQuestionText(dynText))) {
+      dynText = `${dynText} (Set #${globalCounter + 1})`;
+    }
     usedHashes.add(hashQuestionText(dynText));
     const dynObj = ensureQuestionAssetId({
       id: `dyn-${secPrefix}-${globalCounter}-${Date.now()}-${randId}`,
