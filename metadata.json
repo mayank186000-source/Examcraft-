@@ -1,0 +1,6 @@
+{
+  "name": "ExamCraft - CBSE Test Generator",
+  "description": "CBSE Class 9, 10 & 12 Question Paper & Test Generator based on latest CBSE curriculum, blueprints, question auto-vault, PYQ repository, and interactive examination engine.",
+  "requestFramePermissions": ["microphone", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

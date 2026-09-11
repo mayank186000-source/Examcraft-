@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Student Activities Log Collection
+    match /student_activities/{activityId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // General Activities Collection Fallback
+    match /activities/{activityId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Quiz Submissions Collection
+    match /quiz_submissions/{submissionId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Generated Paper Logs Collection
+    match /generated_paper_logs/{logId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Users Collection (Allow student registration, login sync & admin deregistration across all devices)
+    match /users/{userId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Kids Grammar Results Collection (5th to 8th tests)
+    match /grammar_results/{resultId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Saved Question Papers Collection
+    match /saved_papers/{paperId} {
+      allow read, create, update, delete: if true;
+    }
+  }
+}
