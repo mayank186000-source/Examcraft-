@@ -184,15 +184,32 @@ export function getLocalStudentActivities(): StudentActivityDoc[] {
 export function mergeActivities(remote: StudentActivityDoc[], local: StudentActivityDoc[]): StudentActivityDoc[] {
   const map = new Map<string, StudentActivityDoc>();
 
+  const getDedupKey = (act: StudentActivityDoc) => {
+    const email = (act.studentEmail || act.studentId || '').toLowerCase().trim();
+    const code = act.paperCode || act.paperId || 'code';
+    if (act.id && !act.id.includes('undefined') && !act.id.includes('NaN')) {
+      return act.id;
+    }
+    return `${act.activityType}_${email}_${code}`;
+  };
+
   remote.forEach(r => {
-    const key = r.id || `${r.studentEmail}_${r.paperCode}_${r.activityType}_${r.timestamp}`;
+    const key = getDedupKey(r);
     map.set(key, r);
   });
 
   local.forEach(l => {
-    const key = l.id || `${l.studentEmail}_${l.paperCode}_${l.activityType}_${l.timestamp}`;
+    const key = getDedupKey(l);
     if (!map.has(key)) {
       map.set(key, l);
+    } else {
+      const existing = map.get(key)!;
+      const tExisting = new Date(existing.timestamp).getTime() || 0;
+      const tLocal = new Date(l.timestamp).getTime() || 0;
+      // If local has a valid non-zero timestamp that is earlier or existing timestamp is invalid/new, preserve valid original timestamp
+      if (tLocal > 0 && (tExisting === 0 || (tExisting > tLocal && tLocal > 100000))) {
+        map.set(key, { ...existing, timestamp: l.timestamp });
+      }
     }
   });
 
@@ -476,6 +493,31 @@ export async function logUserLoginToFirestore(
     console.warn('Firestore login log error:', e);
   }
 
+  // Backup sync to server so Admin Panel and server logs immediately reflect the login
+  try {
+    fetch('/api/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activity: activityPayload })
+    }).catch(() => {});
+  } catch {}
+
+  // Active login clears any stale local deregistration flags
+  try {
+    const raw = localStorage.getItem('examidea_deregistered_user_emails');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const normE = studentEmail.toLowerCase().trim();
+        const cleaned = parsed.filter((item: string) => {
+          const normI = String(item).toLowerCase().trim();
+          return normI !== normE && !normI.includes(normE) && !normE.includes(normI);
+        });
+        localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(cleaned));
+      }
+    }
+  } catch {}
+
   return `auth-${Date.now()}`;
 }
 
@@ -586,12 +628,49 @@ export async function syncGrammarResultToFirestore(result: any): Promise<void> {
   }
 }
 
+const getDeregisteredKeysSet = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem('examidea_deregistered_user_emails');
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    const GENERIC = new Set([
+      'student',
+      'student@examidea.internal',
+      'admin',
+      'user',
+      'guest',
+      'guest user',
+      'guest student',
+      'guest@examcraft.internal',
+      'anonymous',
+      'null',
+      'undefined'
+    ]);
+    return new Set(
+      parsed
+        .map((k: string) => String(k).toLowerCase().trim())
+        .filter(k => k && !GENERIC.has(k))
+    );
+  } catch {
+    return new Set();
+  }
+};
+
 export function subscribeToFirestoreUsers(
   callback: (users: User[]) => void
 ): () => void {
   try {
+    const dereg = getDeregisteredKeysSet();
     const raw = localStorage.getItem('examidea_all_users');
-    callback(raw ? JSON.parse(raw) : []);
+    const localUsers: User[] = raw ? JSON.parse(raw) : [];
+    const filtered = localUsers.filter(u => {
+      const e = (u.email || '').toLowerCase().trim();
+      const i = (u.id || '').toLowerCase().trim();
+      const n = (u.name || '').toLowerCase().trim();
+      return !dereg.has(e) && !dereg.has(i) && !dereg.has(n);
+    });
+    callback(filtered);
   } catch {
     callback([]);
   }
@@ -603,17 +682,35 @@ export function subscribeToFirestoreUsers(
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const remoteUsers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as User));
+        const dereg = getDeregisteredKeysSet();
+        const remoteUsers = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as User))
+          .filter(u => {
+            const e = (u.email || '').toLowerCase().trim();
+            const i = (u.id || '').toLowerCase().trim();
+            const n = (u.name || '').toLowerCase().trim();
+            return !dereg.has(e) && !dereg.has(i) && !dereg.has(n);
+          });
         const raw = localStorage.getItem('examidea_all_users');
         const localUsers: User[] = raw ? JSON.parse(raw) : [];
         const map = new Map<string, User>();
         localUsers.forEach(u => {
-          const key = (u.email || u.id || u.name || '').toLowerCase().trim();
-          if (key) map.set(key, u);
+          const e = (u.email || '').toLowerCase().trim();
+          const i = (u.id || '').toLowerCase().trim();
+          const n = (u.name || '').toLowerCase().trim();
+          const key = e || i || n;
+          if (key && !dereg.has(e) && !dereg.has(i) && !dereg.has(n)) {
+            map.set(key, u);
+          }
         });
         remoteUsers.forEach(u => {
-          const key = (u.email || u.id || u.name || '').toLowerCase().trim();
-          if (key) map.set(key, u);
+          const e = (u.email || '').toLowerCase().trim();
+          const i = (u.id || '').toLowerCase().trim();
+          const n = (u.name || '').toLowerCase().trim();
+          const key = e || i || n;
+          if (key && !dereg.has(e) && !dereg.has(i) && !dereg.has(n)) {
+            map.set(key, u);
+          }
         });
         const merged = Array.from(map.values());
         try {
@@ -632,20 +729,38 @@ export function subscribeToFirestoreUsers(
 }
 
 export async function fetchFirestoreUsers(): Promise<User[]> {
+  const dereg = getDeregisteredKeysSet();
   try {
     if (db && db.app) {
       const snap = await getDocs(query(collection(db, 'users'), limit(200)));
-      const remoteUsers = snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+      const remoteUsers = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as User))
+        .filter(u => {
+          const e = (u.email || '').toLowerCase().trim();
+          const i = (u.id || '').toLowerCase().trim();
+          const n = (u.name || '').toLowerCase().trim();
+          return !dereg.has(e) && !dereg.has(i) && !dereg.has(n);
+        });
       const raw = localStorage.getItem('examidea_all_users');
       const localUsers: User[] = raw ? JSON.parse(raw) : [];
       const map = new Map<string, User>();
       localUsers.forEach(u => {
-        const key = (u.email || u.id || u.name || '').toLowerCase().trim();
-        if (key) map.set(key, u);
+        const e = (u.email || '').toLowerCase().trim();
+        const i = (u.id || '').toLowerCase().trim();
+        const n = (u.name || '').toLowerCase().trim();
+        const key = e || i || n;
+        if (key && !dereg.has(e) && !dereg.has(i) && !dereg.has(n)) {
+          map.set(key, u);
+        }
       });
       remoteUsers.forEach(u => {
-        const key = (u.email || u.id || u.name || '').toLowerCase().trim();
-        if (key) map.set(key, u);
+        const e = (u.email || '').toLowerCase().trim();
+        const i = (u.id || '').toLowerCase().trim();
+        const n = (u.name || '').toLowerCase().trim();
+        const key = e || i || n;
+        if (key && !dereg.has(e) && !dereg.has(i) && !dereg.has(n)) {
+          map.set(key, u);
+        }
       });
       return Array.from(map.values());
     }
@@ -653,7 +768,13 @@ export async function fetchFirestoreUsers(): Promise<User[]> {
 
   try {
     const raw = localStorage.getItem('examidea_all_users');
-    return raw ? JSON.parse(raw) : [];
+    const localUsers: User[] = raw ? JSON.parse(raw) : [];
+    return localUsers.filter(u => {
+      const e = (u.email || '').toLowerCase().trim();
+      const i = (u.id || '').toLowerCase().trim();
+      const n = (u.name || '').toLowerCase().trim();
+      return !dereg.has(e) && !dereg.has(i) && !dereg.has(n);
+    });
   } catch {
     return [];
   }
@@ -663,12 +784,16 @@ export async function deleteUserFromFirestore(userIdOrEmail: string): Promise<vo
   if (!userIdOrEmail) return;
   const target = userIdOrEmail.toLowerCase().trim();
 
-  // Local filter
+  // Local storage cleanup
   try {
     const raw = localStorage.getItem('examidea_all_users');
     if (raw) {
       const list: User[] = JSON.parse(raw);
-      const filtered = list.filter(u => (u.id || '').toLowerCase() !== target && (u.email || '').toLowerCase() !== target);
+      const filtered = list.filter(u => 
+        (u.id || '').toLowerCase().trim() !== target && 
+        (u.email || '').toLowerCase().trim() !== target &&
+        (u.name || '').toLowerCase().trim() !== target
+      );
       localStorage.setItem('examidea_all_users', JSON.stringify(filtered));
     }
   } catch (e) {}
@@ -677,7 +802,40 @@ export async function deleteUserFromFirestore(userIdOrEmail: string): Promise<vo
   try {
     if (db && db.app) {
       const docId = target.replace(/[^a-zA-Z0-9]/g, '_');
-      await deleteDoc(doc(doc(db, 'users'), docId));
+      const candidateIds = [docId, target, `usr-${docId}`, `usr_${docId}`];
+      for (const cid of candidateIds) {
+        try {
+          await deleteDoc(doc(db, 'users', cid));
+        } catch {}
+      }
+
+      // Query and delete matching docs in users collection
+      try {
+        const snap = await getDocs(collection(db, 'users'));
+        for (const d of snap.docs) {
+          const data = d.data();
+          const dEmail = (data.email || '').toLowerCase().trim();
+          const dId = (data.id || d.id || '').toLowerCase().trim();
+          const dName = (data.name || '').toLowerCase().trim();
+          if (dEmail === target || dId === target || dName === target) {
+            await deleteDoc(doc(db, 'users', d.id));
+          }
+        }
+      } catch {}
+
+      // Clean activities for this student
+      try {
+        const actSnap = await getDocs(collection(db, 'activities'));
+        for (const d of actSnap.docs) {
+          const data = d.data();
+          const sEmail = (data.studentEmail || '').toLowerCase().trim();
+          const sId = (data.studentId || '').toLowerCase().trim();
+          const sName = (data.studentName || '').toLowerCase().trim();
+          if (sEmail === target || sId === target || sName === target) {
+            await deleteDoc(doc(db, 'activities', d.id));
+          }
+        }
+      } catch {}
     }
   } catch (e) {
     console.warn('Delete user from firestore error:', e);

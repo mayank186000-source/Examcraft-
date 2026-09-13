@@ -31,8 +31,14 @@ import {
   Database,
   RefreshCw,
   UserX,
+  Mail,
+  UserCheck,
   Upload,
-  Paperclip
+  Paperclip,
+  Calendar,
+  ArrowUpDown,
+  RotateCcw,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { User, DownloadRecord, GeneratedPaper, QuestionBankSet } from '../types';
@@ -125,7 +131,123 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [realtimeUsers, setRealtimeUsers] = useState<User[]>([]);
   const [realtimeActivities, setRealtimeActivities] = useState<StudentActivityDoc[]>([]);
   const [isRealtimeActive, setIsRealtimeActive] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank' | 'deregistered'>('overview');
+  // 4 Primary Systematic Navigation Categories
+  type MainTab = 'overview' | 'users' | 'content' | 'logs';
+  const [mainTab, setMainTab] = useState<MainTab>('overview');
+  const [usersSubTab, setUsersSubTab] = useState<'all_students' | 'email_students' | 'guest_students' | 'admins'>('all_students');
+  const [studentCategoryFilter, setStudentCategoryFilter] = useState<'all' | 'email' | 'guest'>('all');
+  const [activityUserTypeFilter, setActivityUserTypeFilter] = useState<'all' | 'email' | 'guest'>('all');
+  const [logUserTypeFilter, setLogUserTypeFilter] = useState<'all' | 'email' | 'guest'>('all');
+  const [contentSubTab, setContentSubTab] = useState<'papers' | 'questionBank' | 'grammar' | 'importer'>('papers');
+  const [logsSubTab, setLogsSubTab] = useState<'downloads' | 'firestore'>('downloads');
+
+  // Universal Date & Time Filter State
+  type DatePreset = 'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom';
+  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [timeSortOrder, setTimeSortOrder] = useState<'desc' | 'asc'>('desc');
+
+  // Universal Smart Date Matcher
+  const isDateMatch = React.useCallback((dateVal: string | number | undefined | null) => {
+    if (datePreset === 'all') return true;
+    if (!dateVal) return true;
+    let d = new Date(dateVal);
+    if (isNaN(d.getTime())) {
+      const cleaned = String(dateVal).replace(/(\d+)(st|nd|rd|th)/, '$1').trim();
+      d = new Date(cleaned);
+      if (isNaN(d.getTime())) return true;
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    if (datePreset === 'today') {
+      return d >= startOfToday && d <= endOfToday;
+    }
+    if (datePreset === 'yesterday') {
+      const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+      const endOfYesterday = new Date(startOfToday.getTime() - 1);
+      return d >= startOfYesterday && d <= endOfYesterday;
+    }
+    if (datePreset === '7days') {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return d >= sevenDaysAgo && d <= now;
+    }
+    if (datePreset === '30days') {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return d >= thirtyDaysAgo && d <= now;
+    }
+    if (datePreset === 'custom') {
+      if (customStartDate) {
+        const s = new Date(customStartDate + 'T00:00:00');
+        if (d < s) return false;
+      }
+      if (customEndDate) {
+        const e = new Date(customEndDate + 'T23:59:59');
+        if (d > e) return false;
+      }
+      return true;
+    }
+    return true;
+  }, [datePreset, customStartDate, customEndDate]);
+
+  // Universal Timestamp Sorting Helper
+  const sortByTime = React.useCallback((dateA: string | number | undefined | null, dateB: string | number | undefined | null) => {
+    let tA = 0;
+    let tB = 0;
+    if (dateA) {
+      const dA = new Date(dateA);
+      tA = !isNaN(dA.getTime()) ? dA.getTime() : new Date(String(dateA).replace(/(\d+)(st|nd|rd|th)/, '$1')).getTime() || 0;
+    }
+    if (dateB) {
+      const dB = new Date(dateB);
+      tB = !isNaN(dB.getTime()) ? dB.getTime() : new Date(String(dateB).replace(/(\d+)(st|nd|rd|th)/, '$1')).getTime() || 0;
+    }
+    return timeSortOrder === 'desc' ? tB - tA : tA - tB;
+  }, [timeSortOrder]);
+
+  // Backward-compatible activeTab mapped dynamically from systematic mainTab & subTab
+  const activeTab: 'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank' = React.useMemo(() => {
+    if (mainTab === 'overview') return 'overview';
+    if (mainTab === 'users') return usersSubTab === 'admins' ? 'admins' : 'users';
+    if (mainTab === 'content') return contentSubTab;
+    if (mainTab === 'logs') return logsSubTab === 'firestore' ? 'firestore' : 'logs';
+    return 'overview';
+  }, [mainTab, usersSubTab, contentSubTab, logsSubTab]);
+
+  // Seamless navigation helper that updates both main and sub-categories
+  const setActiveTab = React.useCallback((tab: 'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank') => {
+    if (tab === 'overview') {
+      setMainTab('overview');
+    } else if (tab === 'users') {
+      setMainTab('users');
+      setUsersSubTab('all_students');
+      setStudentCategoryFilter('all');
+    } else if (tab === 'admins') {
+      setMainTab('users');
+      setUsersSubTab('admins');
+    } else if (tab === 'papers') {
+      setMainTab('content');
+      setContentSubTab('papers');
+    } else if (tab === 'questionBank') {
+      setMainTab('content');
+      setContentSubTab('questionBank');
+    } else if (tab === 'grammar') {
+      setMainTab('content');
+      setContentSubTab('grammar');
+    } else if (tab === 'importer') {
+      setMainTab('content');
+      setContentSubTab('importer');
+    } else if (tab === 'logs') {
+      setMainTab('logs');
+      setLogsSubTab('downloads');
+    } else if (tab === 'firestore') {
+      setMainTab('logs');
+      setLogsSubTab('firestore');
+    }
+  }, []);
   const [userSearch, setUserSearch] = useState<string>('');
   const [logSearch, setLogSearch] = useState<string>('');
   const [paperSearch, setPaperSearch] = useState<string>('');
@@ -205,23 +327,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           if (Array.isArray(data.papers)) setSavedPapers(data.papers);
           if (Array.isArray(data.grammarResults) && data.grammarResults.length > 0) {
             setGrammarResults(data.grammarResults);
-            const convertedGrammar: StudentActivityDoc[] = data.grammarResults.map((r: any) => ({
-              id: `quiz_${r.code}_${r.date}`,
-              studentId: r.userEmail || 'student',
-              studentName: r.userName || (r.userEmail ? r.userEmail.split('@')[0] : 'Student'),
-              studentEmail: r.userEmail || 'student@examcraft.internal',
-              activityType: 'quiz_submitted',
-              paperId: r.code,
-              paperCode: r.code,
-              paperTitle: `${r.topic || 'Grammar Practice'} (Class ${r.classLevel || 'General'})`,
-              subject: 'English Grammar & Practice',
-              classLevel: String(r.classLevel || '10'),
-              score: r.score || 0,
-              totalMarks: r.total || 5,
-              percentage: r.percentage || 0,
-              timeTakenSeconds: r.timeTakenSeconds || 60,
-              timestamp: r.timestamp || new Date().toISOString()
-            }));
+            const convertedGrammar: StudentActivityDoc[] = data.grammarResults.map((r: any) => {
+              const validTime = r.date || r.timestamp || r.createdAt || r.syncedAt;
+              return {
+                id: `quiz_${r.code}_${validTime || 'fixed'}`,
+                studentId: r.userEmail || 'student',
+                studentName: r.userName || (r.userEmail ? r.userEmail.split('@')[0] : 'Student'),
+                studentEmail: r.userEmail || 'student@examcraft.internal',
+                activityType: 'quiz_submitted',
+                paperId: r.code,
+                paperCode: r.code,
+                paperTitle: `${r.topic || 'Grammar Practice'} (Class ${r.classLevel || 'General'})`,
+                subject: 'English Grammar & Practice',
+                classLevel: String(r.classLevel || '10'),
+                score: r.score || 0,
+                totalMarks: r.total || 5,
+                percentage: r.percentage || 0,
+                timeTakenSeconds: r.timeTakenSeconds || 60,
+                timestamp: validTime || new Date().toISOString()
+              };
+            });
             setRealtimeActivities(prev => mergeActivities(convertedGrammar, prev));
           }
           if (Array.isArray(data.customQuestions)) setServerCustomQuestions(data.customQuestions);
@@ -376,22 +501,25 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             return Array.from(map.values()).sort((a, b) => new Date(b.date || (b as any).timestamp || 0).getTime() - new Date(a.date || (a as any).timestamp || 0).getTime());
           });
 
-          const convertedActivities: StudentActivityDoc[] = remoteGrammarResults.map(g => ({
-            id: `grammar_${g.code}_${(g as any).timestamp || (g as any).syncedAt || g.date || new Date().toISOString()}`,
-            studentId: `usr_${g.userEmail || g.userName || 'guest'}`,
-            studentName: g.userName || (g.userEmail ? g.userEmail.split('@')[0] : 'Kids Student'),
-            studentEmail: g.userEmail || 'guest@examcraft.internal',
-            activityType: 'quiz_submitted',
-            paperId: g.code,
-            paperCode: g.code,
-            paperTitle: `Kids Test: ${g.topic || 'Grammar'} (${g.difficulty || 'Medium'})`,
-            subject: `Grammar Class ${g.classLevel || '5-8'}`,
-            classLevel: String(g.classLevel || '5-8'),
-            score: g.score,
-            totalMarks: g.total || 10,
-            percentage: g.percentage || (g.total ? Math.round((g.score / g.total) * 100) : 0),
-            timestamp: (g as any).timestamp || (g as any).syncedAt || g.date || new Date().toISOString()
-          }));
+          const convertedActivities: StudentActivityDoc[] = remoteGrammarResults.map(g => {
+            const validTime = g.date || (g as any).timestamp || (g as any).createdAt || (g as any).syncedAt;
+            return {
+              id: `grammar_${g.code}_${validTime || 'fixed'}`,
+              studentId: `usr_${g.userEmail || g.userName || 'guest'}`,
+              studentName: g.userName || (g.userEmail ? g.userEmail.split('@')[0] : 'Kids Student'),
+              studentEmail: g.userEmail || 'guest@examcraft.internal',
+              activityType: 'quiz_submitted',
+              paperId: g.code,
+              paperCode: g.code,
+              paperTitle: `Kids Test: ${g.topic || 'Grammar'} (${g.difficulty || 'Medium'})`,
+              subject: `Grammar Class ${g.classLevel || '5-8'}`,
+              classLevel: String(g.classLevel || '5-8'),
+              score: g.score,
+              totalMarks: g.total || 10,
+              percentage: g.percentage || (g.total ? Math.round((g.score / g.total) * 100) : 0),
+              timestamp: validTime || new Date().toISOString()
+            };
+          });
           setRealtimeActivities(prev => mergeActivities(convertedActivities, prev));
         }
       });
@@ -726,23 +854,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     results: SavedGrammarResult[];
   }>);
 
-  const filteredGrammarResults = grammarResults.filter(res => {
-    const rawEmail = res.userEmail?.toLowerCase();
-    const userEmail = (!rawEmail || rawEmail === 'unknown@guest') ? 'guest@examcraft.internal' : rawEmail;
-    const matchesUser = grammarUserFilter === 'all' || userEmail === grammarUserFilter;
-    const matchesClass = grammarClassFilter === 'all' || res.classLevel === grammarClassFilter;
-    const matchesTopic = grammarTopicFilter === 'all' || res.topic === grammarTopicFilter;
-    const resDiff = res.difficulty || 'Medium';
-    const matchesDifficulty = grammarDifficultyFilter === 'all' || resDiff === grammarDifficultyFilter;
+  const filteredGrammarResults = grammarResults
+    .filter(res => {
+      const matchesDate = isDateMatch(res.date || (res as any).createdAt);
+      if (!matchesDate) return false;
 
-    const matchesSearch =
-      res.code.toLowerCase().includes(grammarSearch.toLowerCase()) ||
-      res.topic.toLowerCase().includes(grammarSearch.toLowerCase()) ||
-      (res.userEmail && res.userEmail.toLowerCase().includes(grammarSearch.toLowerCase())) ||
-      (res.userName && res.userName.toLowerCase().includes(grammarSearch.toLowerCase()));
+      const rawEmail = res.userEmail?.toLowerCase();
+      const userEmail = (!rawEmail || rawEmail === 'unknown@guest') ? 'guest@examcraft.internal' : rawEmail;
+      const matchesUser = grammarUserFilter === 'all' || userEmail === grammarUserFilter;
+      const matchesClass = grammarClassFilter === 'all' || res.classLevel === grammarClassFilter;
+      const matchesTopic = grammarTopicFilter === 'all' || res.topic === grammarTopicFilter;
+      const resDiff = res.difficulty || 'Medium';
+      const matchesDifficulty = grammarDifficultyFilter === 'all' || resDiff === grammarDifficultyFilter;
 
-    return matchesUser && matchesClass && matchesTopic && matchesDifficulty && matchesSearch;
-  });
+      const matchesSearch =
+        res.code.toLowerCase().includes(grammarSearch.toLowerCase()) ||
+        res.topic.toLowerCase().includes(grammarSearch.toLowerCase()) ||
+        (res.userEmail && res.userEmail.toLowerCase().includes(grammarSearch.toLowerCase())) ||
+        (res.userName && res.userName.toLowerCase().includes(grammarSearch.toLowerCase()));
+
+      return matchesUser && matchesClass && matchesTopic && matchesDifficulty && matchesSearch;
+    })
+    .sort((a, b) => sortByTime(a.date, b.date));
 
   // Merge real-time snapshot users with AuthContext users for immediate multi-device visibility
   const effectiveAllUsers = React.useMemo(() => {
@@ -763,7 +896,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     return mergeActivities(realtimeActivities, firestoreActivities);
   }, [realtimeActivities, firestoreActivities]);
 
-  const GENERIC_RESERVED_TERMS = React.useMemo(() => new Set(['student', 'admin', 'user', 'guest', 'anonymous', 'null', 'undefined']), []);
+  const GENERIC_RESERVED_TERMS = React.useMemo(() => new Set([
+    'student',
+    'student@examidea.internal',
+    'admin',
+    'user',
+    'guest',
+    'guest user',
+    'guest student',
+    'guest@examcraft.internal',
+    'anonymous',
+    'null',
+    'undefined'
+  ]), []);
 
   const validDeregisteredEmails = React.useMemo(() => {
     if (!deregisteredUserEmails) return [];
@@ -772,16 +917,37 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       .filter(e => e.length > 0 && !GENERIC_RESERVED_TERMS.has(e));
   }, [deregisteredUserEmails, GENERIC_RESERVED_TERMS]);
 
-  // Helper to check if email/user/id is temporarily deregistered
+  // Helper to check if email/user/id is deregistered
   const isDeregisteredUser = (...keys: (string | undefined | null)[]) => {
     if (validDeregisteredEmails.length === 0) return false;
     const normSet = new Set(validDeregisteredEmails);
     return keys.some(k => {
       if (!k) return false;
       const norm = String(k).toLowerCase().trim();
-      return norm.length > 0 && !GENERIC_RESERVED_TERMS.has(norm) && normSet.has(norm);
+      if (!norm || GENERIC_RESERVED_TERMS.has(norm)) return false;
+      if (normSet.has(norm)) return true;
+      const cleanDocId = norm.replace(/[^a-zA-Z0-9]/g, '_');
+      if (normSet.has(cleanDocId)) return true;
+      if (norm.startsWith('usr-') && (normSet.has(norm.slice(4)) || normSet.has(norm.slice(4).replace(/_/g, '.')))) return true;
+      return false;
     });
   };
+
+  // Helper to distinguish Guest Users from Email Logged-in Students
+  const isGuestUser = React.useCallback((u: { email?: string; id?: string; name?: string; isGuest?: boolean }) => {
+    if (u.isGuest) return true;
+    const email = (u.email || '').toLowerCase().trim();
+    const name = (u.name || '').toLowerCase().trim();
+    const id = (u.id || '').toLowerCase().trim();
+
+    if (!email || email === 'guest' || email.includes('guest') || email.includes('examcraft.internal') || email.includes('unknown@') || !email.includes('@')) {
+      return true;
+    }
+    if (name.includes('guest') || id.includes('guest')) {
+      return true;
+    }
+    return false;
+  }, []);
 
   // Build master unified user list by merging effectiveAllUsers, effectiveActivities, userPaperStats, userGrammarStats, downloadLogs
   const unifiedUserMap = new Map<string, User>();
@@ -882,6 +1048,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const masterUsersList = Array.from(unifiedUserMap.values());
   const totalStudents = masterUsersList.filter(u => u.role === 'student').length;
+  const emailStudentsCount = React.useMemo(() => masterUsersList.filter(u => u.role === 'student' && !isGuestUser(u)).length, [masterUsersList, isGuestUser]);
+  const guestStudentsCount = React.useMemo(() => masterUsersList.filter(u => u.role === 'student' && isGuestUser(u)).length, [masterUsersList, isGuestUser]);
+  const adminCount = React.useMemo(() => masterUsersList.filter(u => u.role === 'admin').length, [masterUsersList]);
 
   // Unique users list for Firestore Activity Logs dropdown filter
   const uniqueFirestoreUsers = React.useMemo(() => {
@@ -939,49 +1108,86 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     return Array.from(map.values());
   }, [downloadLogs, masterUsersList]);
 
-  const filteredUsers = masterUsersList.filter(u =>
-    (u.name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
-    (u.email || '').toLowerCase().includes(userSearch.toLowerCase())
-  );
+  const filteredUsers = masterUsersList
+    .filter(u => {
+      // Subtab / Role filter
+      if (usersSubTab === 'admins' && u.role !== 'admin') return false;
+      if (usersSubTab !== 'admins' && u.role === 'admin') return false;
 
-  const filteredLogs = downloadLogs.filter(l => {
-    const search = logSearch.toLowerCase();
-    const matchesSearch =
-      (l.paperTitle || '').toLowerCase().includes(search) ||
-      (l.userEmail || '').toLowerCase().includes(search) ||
-      (l.subject || '').toLowerCase().includes(search) ||
-      (l.paperCode && l.paperCode.toLowerCase().includes(search));
+      // Separate Guest vs Email Student filter
+      if (usersSubTab === 'email_students' && isGuestUser(u)) return false;
+      if (usersSubTab === 'guest_students' && !isGuestUser(u)) return false;
 
-    const userKey = logUserFilter.toLowerCase().trim();
-    const matchesUser =
-      logUserFilter === 'all' ||
-      (l.userEmail || '').toLowerCase().trim() === userKey ||
-      (l.userName && l.userName.toLowerCase().trim().includes(userKey));
+      if (studentCategoryFilter === 'email' && isGuestUser(u)) return false;
+      if (studentCategoryFilter === 'guest' && !isGuestUser(u)) return false;
 
-    return matchesSearch && matchesUser;
-  });
+      const userDate = u.createdAt || u.lastDownloadDate;
+      const matchesDate = isDateMatch(userDate);
+      if (!matchesDate) return false;
 
-  const filteredFirestoreActivities = effectiveActivities.filter(act => {
-    const search = firestoreSearch.toLowerCase();
-    const matchesSearch =
-      act.studentId.toLowerCase().includes(search) ||
-      act.studentName.toLowerCase().includes(search) ||
-      act.studentEmail.toLowerCase().includes(search) ||
-      act.paperCode.toLowerCase().includes(search) ||
-      act.paperTitle.toLowerCase().includes(search) ||
-      act.subject.toLowerCase().includes(search);
+      return (
+        (u.name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(userSearch.toLowerCase())
+      );
+    })
+    .sort((a, b) => sortByTime(a.createdAt || a.lastDownloadDate, b.createdAt || b.lastDownloadDate));
 
-    const matchesType = firestoreActivityFilter === 'all' || act.activityType === firestoreActivityFilter;
+  const filteredLogs = downloadLogs
+    .filter(l => {
+      const matchesDate = isDateMatch(l.timestamp);
+      if (!matchesDate) return false;
 
-    const userKey = firestoreUserFilter.toLowerCase().trim();
-    const matchesUser =
-      firestoreUserFilter === 'all' ||
-      act.studentEmail.toLowerCase().trim() === userKey ||
-      act.studentId.toLowerCase().trim() === userKey ||
-      act.studentName.toLowerCase().trim().includes(userKey);
+      const isGuest = isGuestUser({ email: l.userEmail, name: l.userName });
+      if (logUserTypeFilter === 'email' && isGuest) return false;
+      if (logUserTypeFilter === 'guest' && !isGuest) return false;
 
-    return matchesSearch && matchesType && matchesUser;
-  });
+      const search = logSearch.toLowerCase();
+      const matchesSearch =
+        (l.paperTitle || '').toLowerCase().includes(search) ||
+        (l.userEmail || '').toLowerCase().includes(search) ||
+        (l.subject || '').toLowerCase().includes(search) ||
+        (l.paperCode && l.paperCode.toLowerCase().includes(search));
+
+      const userKey = logUserFilter.toLowerCase().trim();
+      const matchesUser =
+        logUserFilter === 'all' ||
+        (l.userEmail || '').toLowerCase().trim() === userKey ||
+        (l.userName && l.userName.toLowerCase().trim().includes(userKey));
+
+      return matchesSearch && matchesUser;
+    })
+    .sort((a, b) => sortByTime(a.timestamp, b.timestamp));
+
+  const filteredFirestoreActivities = effectiveActivities
+    .filter(act => {
+      const matchesDate = isDateMatch(act.timestamp);
+      if (!matchesDate) return false;
+
+      const isGuest = isGuestUser({ email: act.studentEmail, id: act.studentId, name: act.studentName });
+      if (activityUserTypeFilter === 'email' && isGuest) return false;
+      if (activityUserTypeFilter === 'guest' && !isGuest) return false;
+
+      const search = firestoreSearch.toLowerCase();
+      const matchesSearch =
+        act.studentId.toLowerCase().includes(search) ||
+        act.studentName.toLowerCase().includes(search) ||
+        act.studentEmail.toLowerCase().includes(search) ||
+        act.paperCode.toLowerCase().includes(search) ||
+        act.paperTitle.toLowerCase().includes(search) ||
+        act.subject.toLowerCase().includes(search);
+
+      const matchesType = firestoreActivityFilter === 'all' || act.activityType === firestoreActivityFilter;
+
+      const userKey = firestoreUserFilter.toLowerCase().trim();
+      const matchesUser =
+        firestoreUserFilter === 'all' ||
+        act.studentEmail.toLowerCase().trim() === userKey ||
+        act.studentId.toLowerCase().trim() === userKey ||
+        act.studentName.toLowerCase().trim().includes(userKey);
+
+      return matchesSearch && matchesType && matchesUser;
+    })
+    .sort((a, b) => sortByTime(a.timestamp, b.timestamp));
 
   const availableSubjects = Array.from(
     new Set(
@@ -998,37 +1204,42 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     new Set(savedPapers.map(p => Number(p.config.totalMarks || 80)))
   ).sort((a: number, b: number) => b - a);
 
-  const filteredPapers = savedPapers.filter(paper => {
-    const matchesSearch =
-      paper.config.title.toLowerCase().includes(paperSearch.toLowerCase()) ||
-      paper.subjectName.toLowerCase().includes(paperSearch.toLowerCase()) ||
-      (paper.paperCode && paper.paperCode.toLowerCase().includes(paperSearch.toLowerCase())) ||
-      (paper.generatedBy?.email && paper.generatedBy.email.toLowerCase().includes(paperSearch.toLowerCase())) ||
-      (paper.generatedBy?.name && paper.generatedBy.name.toLowerCase().includes(paperSearch.toLowerCase()));
+  const filteredPapers = savedPapers
+    .filter(paper => {
+      const matchesDate = isDateMatch(paper.createdAt);
+      if (!matchesDate) return false;
 
-    const rawEmail = paper.generatedBy?.email?.toLowerCase();
-    const paperUserEmail = (!rawEmail || rawEmail === 'unknown@guest') ? 'guest@examcraft.internal' : rawEmail;
-    const matchesUser = paperUserFilter === 'all' || paperUserEmail === paperUserFilter;
+      const matchesSearch =
+        paper.config.title.toLowerCase().includes(paperSearch.toLowerCase()) ||
+        paper.subjectName.toLowerCase().includes(paperSearch.toLowerCase()) ||
+        (paper.paperCode && paper.paperCode.toLowerCase().includes(paperSearch.toLowerCase())) ||
+        (paper.generatedBy?.email && paper.generatedBy.email.toLowerCase().includes(paperSearch.toLowerCase())) ||
+        (paper.generatedBy?.name && paper.generatedBy.name.toLowerCase().includes(paperSearch.toLowerCase()));
 
-    // Class Filter
-    const fullText = `${paper.subjectName} ${paper.config.title || ''}`;
-    const classMatch = fullText.match(/Class\s*(12|11|10|9|8|7|6|5|4|3)/i) || fullText.match(/\b(12|11|10|9|8|7|6|5|4|3)\b/);
-    const paperClass = classMatch ? classMatch[1] : '';
-    const matchesClass = paperClassFilter === 'all' || paperClass === paperClassFilter;
+      const rawEmail = paper.generatedBy?.email?.toLowerCase();
+      const paperUserEmail = (!rawEmail || rawEmail === 'unknown@guest') ? 'guest@examcraft.internal' : rawEmail;
+      const matchesUser = paperUserFilter === 'all' || paperUserEmail === paperUserFilter;
 
-    // Subject Filter
-    const cleanSub = paper.subjectName.replace(/Class\s*\d+/gi, '').replace(/CBSE/gi, '').trim();
-    const matchesSubject =
-      paperSubjectFilter === 'all' ||
-      cleanSub.toLowerCase().includes(paperSubjectFilter.toLowerCase()) ||
-      paper.subjectName.toLowerCase().includes(paperSubjectFilter.toLowerCase());
+      // Class Filter
+      const fullText = `${paper.subjectName} ${paper.config.title || ''}`;
+      const classMatch = fullText.match(/Class\s*(12|11|10|9|8|7|6|5|4|3)/i) || fullText.match(/\b(12|11|10|9|8|7|6|5|4|3)\b/);
+      const paperClass = classMatch ? classMatch[1] : '';
+      const matchesClass = paperClassFilter === 'all' || paperClass === paperClassFilter;
 
-    // Marks Filter
-    const paperMarks = String(paper.config.totalMarks || 80);
-    const matchesMarks = paperMarksFilter === 'all' || paperMarks === paperMarksFilter;
+      // Subject Filter
+      const cleanSub = paper.subjectName.replace(/Class\s*\d+/gi, '').replace(/CBSE/gi, '').trim();
+      const matchesSubject =
+        paperSubjectFilter === 'all' ||
+        cleanSub.toLowerCase().includes(paperSubjectFilter.toLowerCase()) ||
+        paper.subjectName.toLowerCase().includes(paperSubjectFilter.toLowerCase());
 
-    return matchesSearch && matchesUser && matchesClass && matchesSubject && matchesMarks;
-  });
+      // Marks Filter
+      const paperMarks = String(paper.config.totalMarks || 80);
+      const matchesMarks = paperMarksFilter === 'all' || paperMarks === paperMarksFilter;
+
+      return matchesSearch && matchesUser && matchesClass && matchesSubject && matchesMarks;
+    })
+    .sort((a, b) => sortByTime(a.createdAt, b.createdAt));
 
   // Question Bank Sets Handlers
   const handleQbFileUpload = async (file: File) => {
@@ -1196,21 +1407,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setQbStatusMsg(null);
   };
 
-  const filteredQbSets = questionBankSets.filter(setObj => {
-    const query = qbSearch.toLowerCase().trim();
-    const matchesSearch =
-      !query ||
-      setObj.title.toLowerCase().includes(query) ||
-      setObj.subject.toLowerCase().includes(query) ||
-      (setObj.description && setObj.description.toLowerCase().includes(query)) ||
-      (setObj.rawContent && setObj.rawContent.toLowerCase().includes(query));
+  const filteredQbSets = questionBankSets
+    .filter(setObj => {
+      const matchesDate = isDateMatch(setObj.createdAt);
+      if (!matchesDate) return false;
 
-    const matchesClass = qbClassFilter === 'all' || String(setObj.classLevel) === String(qbClassFilter);
-    const matchesSubject = qbSubjectFilter === 'all' || setObj.subject.toLowerCase().includes(qbSubjectFilter.toLowerCase());
-    const matchesMarks = qbMarksFilter === 'all' || String(setObj.totalMarks) === String(qbMarksFilter);
+      const query = qbSearch.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        setObj.title.toLowerCase().includes(query) ||
+        setObj.subject.toLowerCase().includes(query) ||
+        (setObj.description && setObj.description.toLowerCase().includes(query)) ||
+        (setObj.rawContent && setObj.rawContent.toLowerCase().includes(query));
 
-    return matchesSearch && matchesClass && matchesSubject && matchesMarks;
-  });
+      const matchesClass = qbClassFilter === 'all' || String(setObj.classLevel) === String(qbClassFilter);
+      const matchesSubject = qbSubjectFilter === 'all' || setObj.subject.toLowerCase().includes(qbSubjectFilter.toLowerCase());
+      const matchesMarks = qbMarksFilter === 'all' || String(setObj.totalMarks) === String(qbMarksFilter);
+
+      return matchesSearch && matchesClass && matchesSubject && matchesMarks;
+    })
+    .sort((a, b) => sortByTime(a.createdAt, b.createdAt));
 
   if (!isOpen) return null;
 
@@ -1277,144 +1493,291 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tier-1 Master Category Navigation */}
         <div className="flex items-center px-4 sm:px-6 border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 overflow-x-auto gap-2 py-2.5">
           <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'overview'
-                ? 'bg-amber-700 text-white shadow-sm'
+            onClick={() => setMainTab('overview')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              mainTab === 'overview'
+                ? 'bg-amber-700 text-white shadow-md shadow-amber-900/20'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
             }`}
           >
-            <Sliders className="w-4 h-4" />
+            <Sliders className="w-4 h-4 text-amber-300" />
             <span>Dashboard Overview</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('papers')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'papers'
-                ? 'bg-amber-700 text-white shadow-sm'
+            onClick={() => setMainTab('users')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              mainTab === 'users'
+                ? 'bg-amber-700 text-white shadow-md shadow-amber-900/20'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
             }`}
           >
-            <FileText className="w-4 h-4 text-amber-300" />
-            <span>Saved Papers ({savedPapers.length})</span>
-            <span className="bg-amber-400 text-stone-900 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase">
-              1-Click View
+            <Users className="w-4 h-4 text-amber-300" />
+            <span>Students & Limits</span>
+            <span className="bg-amber-900/40 text-amber-200 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+              {totalStudents}
             </span>
           </button>
 
           <button
-            onClick={() => setActiveTab('grammar')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'grammar'
-                ? 'bg-emerald-700 text-white shadow-sm'
+            onClick={() => setMainTab('content')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              mainTab === 'content'
+                ? 'bg-amber-700 text-white shadow-md shadow-amber-900/20'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
             }`}
           >
-            <GraduationCap className="w-4 h-4 text-emerald-400" />
-            <span>Kids Grammar 5th-8th ({grammarResults.length})</span>
-            <span className="bg-emerald-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase">
-              Userwise
+            <BookOpen className="w-4 h-4 text-amber-300" />
+            <span>Content Hub</span>
+            <span className="bg-amber-900/40 text-amber-200 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+              {savedPapers.length + questionBankSets.length + grammarResults.length}
             </span>
           </button>
 
           <button
-            onClick={() => setActiveTab('users')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'users'
-                ? 'bg-amber-700 text-white shadow-sm'
+            onClick={() => setMainTab('logs')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              mainTab === 'logs'
+                ? 'bg-amber-700 text-white shadow-md shadow-amber-900/20'
                 : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
             }`}
           >
-            <Users className="w-4 h-4" />
-            <span>Students & Limit Manager ({totalStudents})</span>
+            <Download className="w-4 h-4 text-amber-300" />
+            <span>Logs & Audits</span>
+            <span className="bg-amber-900/40 text-amber-200 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+              {totalDownloads}
+            </span>
           </button>
+        </div>
 
-          {validDeregisteredEmails.length > 0 && (
+        {/* Tier-2 Sub-Navigation Pills & Universal Date/Time Filter Bar */}
+        <div className="px-4 sm:px-6 py-2.5 bg-stone-100/90 dark:bg-stone-900/90 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Left: Context-specific Sub-Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {mainTab === 'overview' && (
+              <div className="flex items-center gap-2 text-stone-600 dark:text-stone-300 font-medium py-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Live System Status • Real-time Sync Active</span>
+              </div>
+            )}
+
+            {mainTab === 'users' && (
+              <>
+                <button
+                  onClick={() => { setUsersSubTab('all_students'); setStudentCategoryFilter('all'); }}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    usersSubTab === 'all_students'
+                      ? 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5 text-amber-600" />
+                  <span>All Students ({totalStudents})</span>
+                </button>
+
+                <button
+                  onClick={() => { setUsersSubTab('email_students'); setStudentCategoryFilter('email'); }}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    usersSubTab === 'email_students'
+                      ? 'bg-white dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Mail className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>📧 Email Logins ({emailStudentsCount})</span>
+                </button>
+
+                <button
+                  onClick={() => { setUsersSubTab('guest_students'); setStudentCategoryFilter('guest'); }}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    usersSubTab === 'guest_students'
+                      ? 'bg-white dark:bg-stone-800 text-purple-700 dark:text-purple-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <UserX className="w-3.5 h-3.5 text-purple-500" />
+                  <span>👤 Guest Logins ({guestStudentsCount})</span>
+                </button>
+
+                <button
+                  onClick={() => setUsersSubTab('admins')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    usersSubTab === 'admins'
+                      ? 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Admin Roster ({adminEmails.length})</span>
+                </button>
+              </>
+            )}
+
+            {mainTab === 'content' && (
+              <>
+                <button
+                  onClick={() => setContentSubTab('papers')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    contentSubTab === 'papers'
+                      ? 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Saved Papers ({savedPapers.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setContentSubTab('questionBank')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    contentSubTab === 'questionBank'
+                      ? 'bg-white dark:bg-stone-800 text-purple-700 dark:text-purple-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Question Bank Sets ({questionBankSets.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setContentSubTab('grammar')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    contentSubTab === 'grammar'
+                      ? 'bg-white dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Kids Grammar 5th-8th ({grammarResults.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setContentSubTab('importer')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    contentSubTab === 'importer'
+                      ? 'bg-white dark:bg-stone-800 text-sky-700 dark:text-sky-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Import Questions ({serverCustomQuestions.length})</span>
+                </button>
+              </>
+            )}
+
+            {mainTab === 'logs' && (
+              <>
+                <button
+                  onClick={() => setLogsSubTab('downloads')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    logsSubTab === 'downloads'
+                      ? 'bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Download Logs ({downloadLogs.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setLogsSubTab('firestore')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    logsSubTab === 'firestore'
+                      ? 'bg-white dark:bg-stone-800 text-orange-600 dark:text-orange-400 shadow-xs border border-stone-300 dark:border-stone-700'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Flame className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Firestore Live Activity ({effectiveActivities.length})</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Right: Smart Date & Time Filter Bar */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1 bg-white dark:bg-stone-800/90 p-1 rounded-xl border border-stone-300 dark:border-stone-700 shadow-2xs">
+              <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 px-1.5 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">Date:</span>
+              </span>
+
+              {(['all', 'today', 'yesterday', '7days', '30days', 'custom'] as DatePreset[]).map((preset) => {
+                const labels: Record<DatePreset, string> = {
+                  all: 'All Time',
+                  today: 'Today',
+                  yesterday: 'Yesterday',
+                  '7days': '7 Days',
+                  '30days': '30 Days',
+                  custom: 'Custom 📅'
+                };
+                const isActive = datePreset === preset;
+                return (
+                  <button
+                    key={`date-preset-${preset}`}
+                    onClick={() => setDatePreset(preset)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'
+                    }`}
+                  >
+                    {labels[preset]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Date Range Pickers */}
+            {datePreset === 'custom' && (
+              <div className="flex items-center gap-1.5 bg-white dark:bg-stone-800/90 px-2.5 py-1 rounded-xl border border-stone-300 dark:border-stone-700 animate-in fade-in">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="text-[11px] font-bold bg-transparent text-stone-800 dark:text-stone-200 focus:outline-none cursor-pointer"
+                  title="From Date"
+                />
+                <span className="text-stone-400 text-xs">→</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="text-[11px] font-bold bg-transparent text-stone-800 dark:text-stone-200 focus:outline-none cursor-pointer"
+                  title="To Date"
+                />
+              </div>
+            )}
+
+            {/* Time Order Toggle */}
             <button
-              onClick={() => setActiveTab('deregistered')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                activeTab === 'deregistered'
-                  ? 'bg-amber-700 text-white shadow-sm'
-                  : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-              }`}
+              onClick={() => setTimeSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-stone-800/90 border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 font-bold hover:bg-stone-200 dark:hover:bg-stone-700 transition-all cursor-pointer"
+              title={`Sort: ${timeSortOrder === 'desc' ? 'Newest First' : 'Oldest First'}`}
             >
-              <UserX className="w-4 h-4 text-amber-400" />
-              <span>Unregistered Students ({validDeregisteredEmails.length})</span>
+              <ArrowUpDown className="w-3.5 h-3.5 text-amber-600" />
+              <span className="text-[11px] hidden sm:inline">{timeSortOrder === 'desc' ? 'Newest' : 'Oldest'}</span>
             </button>
-          )}
 
-          <button
-            onClick={() => setActiveTab('logs')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'logs'
-                ? 'bg-amber-700 text-white shadow-sm'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-            }`}
-          >
-            <Download className="w-4 h-4" />
-            <span>Downloads Log ({totalDownloads})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('firestore')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'firestore'
-                ? 'bg-orange-600 text-white shadow-sm'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-            }`}
-          >
-            <Flame className="w-4 h-4 text-orange-400" />
-            <span>Firestore Activity Logs ({effectiveActivities.length})</span>
-            <span className="bg-orange-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase">
-              Firestore DB
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('importer')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'importer'
-                ? 'bg-sky-700 text-white shadow-sm'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-            }`}
-          >
-            <Database className="w-4 h-4 text-sky-400" />
-            <span>Import Questions ({serverCustomQuestions.length})</span>
-            <span className="bg-sky-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase">
-              PDF/Word/Text
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('questionBank')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'questionBank'
-                ? 'bg-purple-700 text-white shadow-sm'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-            }`}
-          >
-            <BookOpen className="w-4 h-4 text-purple-300" />
-            <span>Question Bank & Paper Sets ({questionBankSets.length})</span>
-            <span className="bg-purple-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase">
-              Classwise Set
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('admins')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'admins'
-                ? 'bg-amber-700 text-white shadow-sm'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>Admin Roster ({adminEmails.length})</span>
-          </button>
+            {/* Reset Button */}
+            {datePreset !== 'all' && (
+              <button
+                onClick={() => {
+                  setDatePreset('all');
+                  setCustomStartDate('');
+                  setCustomEndDate('');
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-bold hover:bg-rose-200 transition-all cursor-pointer text-[11px]"
+                title="Reset Date Filter"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Action feedback banner */}
@@ -1947,33 +2310,66 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
               <div className="bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-xs font-black text-emerald-950 dark:text-emerald-200 uppercase tracking-wider">
-                    Student Quota & Paper Limit Drop Box Manager (ड्रॉप बॉक्स से लिमिट सेट करें)
+                  <h3 className="text-xs font-black text-emerald-950 dark:text-emerald-200 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="w-4 h-4 text-emerald-600" />
+                    <span>Student Roster & Limit Manager (ईमेल व गेस्ट छात्र डेटा प्रबंधन)</span>
                   </h3>
                   <p className="text-xs text-emerald-800 dark:text-emerald-300/80 mt-0.5">
-                    ड्रॉप बॉक्स से किसी भी यूज़र को दैनिक पेपर्स की असीमित (Infinite) या कोई भी पसंदीदा लिमिट तुरंत दें।
+                    ईमेल लॉगिन और गेस्ट लॉगिन वाले छात्रों का डेटा अलग-अलग देखें व ड्रॉप बॉक्स से लिमिट बदलें।
                   </p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                  {validDeregisteredEmails.length > 0 && (
+                  {/* Category Switcher Pills */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('deregistered')}
-                      className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                      onClick={() => setStudentCategoryFilter('all')}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                        studentCategoryFilter === 'all'
+                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-extrabold shadow-xs'
+                          : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                      }`}
                     >
-                      <UserX className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                      <span>Unregistered Students ({validDeregisteredEmails.length})</span>
+                      <Users className="w-3 h-3" />
+                      <span>All ({totalStudents})</span>
                     </button>
-                  )}
-                  <div className="relative w-full sm:w-72">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+
+                    <button
+                      type="button"
+                      onClick={() => setStudentCategoryFilter('email')}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                        studentCategoryFilter === 'email'
+                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 font-extrabold shadow-xs'
+                          : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                      }`}
+                    >
+                      <Mail className="w-3 h-3 text-emerald-600" />
+                      <span>📧 Email Logins ({emailStudentsCount})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setStudentCategoryFilter('guest')}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                        studentCategoryFilter === 'guest'
+                          ? 'bg-purple-100 dark:bg-purple-950 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-extrabold shadow-xs'
+                          : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                      }`}
+                    >
+                      <UserX className="w-3 h-3 text-purple-600" />
+                      <span>👤 Guest Logins ({guestStudentsCount})</span>
+                    </button>
+                  </div>
+
+                  <div className="relative w-full sm:w-60">
+                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
                     <input
                       type="text"
                       value={userSearch}
                       onChange={e => setUserSearch(e.target.value)}
-                      placeholder="Search students by name or email..."
-                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-emerald-600"
+                      placeholder="Search name or email..."
+                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-emerald-600"
                     />
                   </div>
                 </div>
@@ -2020,9 +2416,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                   </div>
                                 )}
                                 <div>
-                                  <div className="font-bold text-stone-900 dark:text-white flex items-center gap-1.5">
-                                    {user.name}
+                                  <div className="font-bold text-stone-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                    <span>{user.name}</span>
                                     {isAdm && <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />}
+                                    {isGuestUser(user) ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 flex items-center gap-1 shrink-0" title="Log in via Guest Session">
+                                        <UserX className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                                        <span>👤 गेस्ट (Guest)</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shrink-0" title="Log in via Registered Email">
+                                        <Mail className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                        <span>📧 ईमेल (Email)</span>
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-[11px] text-stone-500">{user.email || user.id}</div>
                                 </div>
@@ -2152,66 +2559,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
           )}
 
-          {/* TAB 10: TEMPORARILY DEREGISTERED / UNREGISTERED STUDENTS */}
-          {activeTab === 'deregistered' && (
-            <div className="space-y-4">
-              <div className="bg-amber-50 dark:bg-stone-900 border-2 border-amber-300 dark:border-amber-800 rounded-2xl p-5 space-y-4 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200 dark:border-amber-800/80 pb-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-black text-sm sm:text-base uppercase tracking-wider">
-                      <UserX className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                      <span>Temporarily Deregistered / Unregistered Students ({validDeregisteredEmails.length})</span>
-                    </div>
-                    <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-                      यह वो छात्र हैं जिन्हें एडमिन पैनल से अस्थाई रूप से अनरजिस्टर्ड किया गया है। आप इन्हें यहाँ से 1-क्लिक में रिस्टोर (Restore) कर सकते हैं।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('users')}
-                    className="bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 text-stone-800 dark:text-stone-200 text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer self-start sm:self-auto"
-                  >
-                    ← Back to Active Students
-                  </button>
-                </div>
-
-                {validDeregisteredEmails.length === 0 ? (
-                  <div className="text-center py-8 text-stone-500 dark:text-stone-400 text-xs font-semibold">
-                    No temporarily unregistered students found.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-                    {validDeregisteredEmails.map((email, idx) => (
-                      <div
-                        key={`dereg-tab-student-${email}-${idx}`}
-                        className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-stone-800 border border-amber-200 dark:border-amber-900/60 shadow-xs gap-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <span className="text-xs font-extrabold text-stone-800 dark:text-stone-200 truncate block">
-                            {email}
-                          </span>
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                            Temporarily Unregistered
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await reRegisterUser(email);
-                            alert(`Student ${email} restored & re-registered!`);
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] px-3.5 py-2 rounded-xl shrink-0 cursor-pointer shadow-xs transition-all active:scale-95 flex items-center gap-1"
-                        >
-                          <span>Restore Student</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* TAB 4: DOWNLOAD LOGS */}
           {activeTab === 'logs' && (
             <div className="space-y-4">
@@ -2243,6 +2590,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           {u.name} ({u.email})
                         </option>
                       ))}
+                    </select>
+                  </div>
+
+                  {/* Category Login Type Filter Dropdown */}
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-3 py-2 text-xs font-bold">
+                    <Filter className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="text-stone-600 dark:text-stone-400 shrink-0">Login Type:</span>
+                    <select
+                      value={logUserTypeFilter}
+                      onChange={e => setLogUserTypeFilter(e.target.value as 'all' | 'email' | 'guest')}
+                      className="bg-transparent outline-none cursor-pointer text-stone-800 dark:text-stone-200"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="email">📧 Email Logins Only</option>
+                      <option value="guest">👤 Guest Logins Only</option>
                     </select>
                   </div>
                 </div>
@@ -2748,6 +3110,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </select>
                   </div>
 
+                  {/* Login Category Filter Dropdown */}
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5">
+                    <Filter className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                    <span className="text-xs font-bold text-stone-600 dark:text-stone-400 shrink-0">Login Type:</span>
+                    <select
+                      value={activityUserTypeFilter}
+                      onChange={(e) => setActivityUserTypeFilter(e.target.value as 'all' | 'email' | 'guest')}
+                      className="bg-transparent text-xs font-bold outline-none cursor-pointer text-stone-800 dark:text-stone-200"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="email">📧 Email Logins Only</option>
+                      <option value="guest">👤 Guest Logins Only</option>
+                    </select>
+                  </div>
+
                   {/* Activity Type Dropdown */}
                   <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5">
                     <Filter className="w-3.5 h-3.5 text-stone-500 shrink-0" />
@@ -2760,6 +3137,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <option value="all">All Activities</option>
                       <option value="paper_generated">Paper Generations</option>
                       <option value="quiz_submitted">Quiz Submissions</option>
+                      <option value="user_login">User Logins</option>
                     </select>
                   </div>
                 </div>
@@ -2781,72 +3159,98 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredFirestoreActivities.map((activity, idx) => (
-                    <div
-                      key={activity.id || `act-${idx}`}
-                      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-4 hover:border-orange-300 dark:hover:border-orange-800 transition-all shadow-2xs flex flex-wrap items-center justify-between gap-4"
-                    >
-                      <div className="flex items-start gap-3 min-w-[280px]">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          activity.activityType === 'quiz_submitted'
-                            ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 border border-emerald-300 dark:border-emerald-800'
-                            : 'bg-amber-100 dark:bg-amber-950 text-amber-600 border border-amber-300 dark:border-amber-800'
-                        }`}>
-                          {activity.activityType === 'quiz_submitted' ? (
-                            <Award className="w-5 h-5" />
-                          ) : (
-                            <FileText className="w-5 h-5" />
+                  {filteredFirestoreActivities.map((activity, idx) => {
+                    const isLogin = activity.activityType === 'user_login' || activity.activityType === 'user_registered';
+                    const isQuiz = activity.activityType === 'quiz_submitted';
+
+                    return (
+                      <div
+                        key={activity.id || `act-${idx}`}
+                        className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-4 hover:border-orange-300 dark:hover:border-orange-800 transition-all shadow-2xs flex flex-wrap items-center justify-between gap-4"
+                      >
+                        <div className="flex items-start gap-3 min-w-[280px]">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                            isLogin
+                              ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 border border-blue-300 dark:border-blue-800'
+                              : isQuiz
+                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 border border-emerald-300 dark:border-emerald-800'
+                              : 'bg-amber-100 dark:bg-amber-950 text-amber-600 border border-amber-300 dark:border-amber-800'
+                          }`}>
+                            {isLogin ? (
+                              <UserCheck className="w-5 h-5" />
+                            ) : isQuiz ? (
+                              <Award className="w-5 h-5" />
+                            ) : (
+                              <FileText className="w-5 h-5" />
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs font-black bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded text-stone-900 dark:text-stone-100">
+                                Student ID: {activity.studentId}
+                              </span>
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                isLogin
+                                  ? 'bg-blue-600 text-white'
+                                  : isQuiz
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-amber-500 text-white'
+                              }`}>
+                                {isLogin ? 'User Login' : isQuiz ? 'Quiz Submitted' : 'Paper Generated'}
+                              </span>
+                            </div>
+
+                            <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 mt-1">
+                              {activity.studentName} ({activity.studentEmail})
+                            </h4>
+                            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                              {isLogin ? (
+                                <span className="font-medium text-stone-600 dark:text-stone-300">Student authenticated successfully into portal</span>
+                              ) : (
+                                <>{activity.subject} • Class {activity.classLevel}th • Paper Title: <span className="font-semibold text-stone-700 dark:text-stone-300">{activity.paperTitle}</span></>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Paper ID & Quiz Score Mapping Details */}
+                        <div className="flex items-center gap-4">
+                          {!isLogin && (
+                            <div className="bg-stone-50 dark:bg-stone-800/60 p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-right">
+                              <span className="text-[10px] font-black text-stone-400 uppercase block">Mapped Paper ID / Code</span>
+                              <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
+                                {activity.paperCode || activity.paperId}
+                              </span>
+                            </div>
                           )}
-                        </div>
 
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-xs font-black bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded text-stone-900 dark:text-stone-100">
-                              Student ID: {activity.studentId}
-                            </span>
-                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                              activity.activityType === 'quiz_submitted'
-                                ? 'bg-emerald-500 text-white'
-                                : 'bg-amber-500 text-white'
-                            }`}>
-                              {activity.activityType === 'quiz_submitted' ? 'Quiz Submitted' : 'Paper Generated'}
-                            </span>
+                          {isQuiz && activity.score !== undefined && (
+                            <div className="bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 text-right">
+                              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase block">Test Score</span>
+                              <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">
+                                {activity.score} / {activity.totalMarks || 0} ({activity.percentage || 0}%)
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="text-right text-[11px] text-stone-400">
+                            {(() => {
+                              const rawT = activity.timestamp;
+                              let d = new Date(rawT);
+                              if (isNaN(d.getTime())) d = new Date();
+                              return (
+                                <>
+                                  <p>{d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                                  <p>{d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
+                                </>
+                              );
+                            })()}
                           </div>
-
-                          <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 mt-1">
-                            {activity.studentName} ({activity.studentEmail})
-                          </h4>
-                          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                            {activity.subject} • Class {activity.classLevel}th • Paper Title: <span className="font-semibold text-stone-700 dark:text-stone-300">{activity.paperTitle}</span>
-                          </p>
                         </div>
                       </div>
-
-                      {/* Paper ID & Quiz Score Mapping Details */}
-                      <div className="flex items-center gap-4">
-                        <div className="bg-stone-50 dark:bg-stone-800/60 p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-right">
-                          <span className="text-[10px] font-black text-stone-400 uppercase block">Mapped Paper ID / Code</span>
-                          <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
-                            {activity.paperCode || activity.paperId}
-                          </span>
-                        </div>
-
-                        {activity.activityType === 'quiz_submitted' && activity.score !== undefined && (
-                          <div className="bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 text-right">
-                            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase block">Test Score</span>
-                            <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">
-                              {activity.score} / {activity.totalMarks || 0} ({activity.percentage || 0}%)
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="text-right text-[11px] text-stone-400">
-                          <p>{new Date(activity.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                          <p>{new Date(activity.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

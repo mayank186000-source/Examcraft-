@@ -21,6 +21,8 @@ export interface GrammarQuestion {
 export interface SavedGrammarResult {
   code: string;
   date: string;
+  timestamp?: string;
+  createdAt?: string;
   classLevel: '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | string;
   topic: string;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
@@ -152,11 +154,31 @@ export function saveGrammarResult(result: SavedGrammarResult): void {
     userEmail = userEmail || 'guest@examcraft.internal';
     userName = userName || (userEmail.includes('guest') ? 'Guest Student (Guest)' : userEmail.split('@')[0]);
 
+    const isoTimestamp = (result as any).timestamp || (result as any).createdAt || new Date().toISOString();
+
     const normalizedResult: SavedGrammarResult = {
       ...result,
+      timestamp: isoTimestamp,
+      createdAt: isoTimestamp,
       userEmail,
       userName
     };
+
+    // Submitting a test clears any stale deregistered flags for this user in localStorage
+    try {
+      const savedDereg = localStorage.getItem('examidea_deregistered_user_emails');
+      if (savedDereg) {
+        const parsed = JSON.parse(savedDereg);
+        if (Array.isArray(parsed)) {
+          const normE = userEmail.toLowerCase().trim();
+          const filtered = parsed.filter((item: string) => {
+            const normI = String(item).toLowerCase().trim();
+            return normI !== normE && !normI.includes(normE) && !normE.includes(normI);
+          });
+          localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
 
     const stored = localStorage.getItem(GRAMMAR_STORAGE_KEY);
     const existing: SavedGrammarResult[] = stored ? JSON.parse(stored) : [];
@@ -190,7 +212,7 @@ export function saveGrammarResult(result: SavedGrammarResult): void {
           totalMarks: normalizedResult.total,
           percentage: normalizedResult.percentage,
           timeTakenSeconds: normalizedResult.timeTakenSeconds || 60,
-          timestamp: new Date().toISOString()
+          timestamp: isoTimestamp
         }
       })
     }).catch(() => {});

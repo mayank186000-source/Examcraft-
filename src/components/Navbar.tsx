@@ -17,7 +17,8 @@ import {
   ChevronDown,
   Cloud,
   GraduationCap,
-  User
+  User,
+  Box
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -33,6 +34,8 @@ interface NavbarProps {
   onOpenAdminPanel: () => void;
   generatedPaperCount: number;
   customCartCount: number;
+  is3DEnabled?: boolean;
+  onToggle3D?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,7 +49,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuthModal,
   onOpenAdminPanel,
   generatedPaperCount,
-  customCartCount
+  customCartCount,
+  is3DEnabled = true,
+  onToggle3D
 }) => {
   const { currentUser, isAdmin, logout, guestDownloadsCount, guestMaxFreeDownloads } = useAuth();
   const [showUserDropdown, setShowUserDropdown] = useState<boolean>(false);
@@ -79,8 +84,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         <span className="tracking-wide truncate">ExamCraft CBSE Test Generator • Class 9th, 10th & 12th Board Blueprint</span>
       </div>
 
-      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-2">
+      <div className="w-full max-w-[1536px] mx-auto px-2.5 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-2 min-w-0">
           {/* Logo */}
           <div 
             onClick={() => setActiveTab('generator')}
@@ -106,14 +111,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Test Generator
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-semibold leading-none mt-0.5 max-w-[180px] sm:max-w-none truncate">
+              <p className="text-[10px] sm:text-[11px] text-stone-500 dark:text-stone-400 font-semibold leading-none mt-0.5 max-w-[160px] sm:max-w-none truncate">
                 {branding?.schoolName ? branding.schoolName : 'Smart & Reliable CBSE Paper Generation'}
               </p>
             </div>
           </div>
 
-          {/* Desktop Nav Links */}
-          <nav className="hidden xl:flex items-center space-x-1">
+          {/* Desktop Nav Links - Flex 1 min-w-0 nav-scrollbar for smooth left-to-right scrolling */}
+          <nav className="hidden lg:flex items-center space-x-1.5 nav-scrollbar min-w-0 flex-1 justify-center px-2 py-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -121,13 +126,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20'
                       : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
+                  <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
                   <span>{item.label}</span>
                   {item.badge && (
                     <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
@@ -148,15 +153,32 @@ export const Navbar: React.FC<NavbarProps> = ({
             })}
           </nav>
 
-          {/* Right Header Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Right Header Actions - ALWAYS PINNED ON THE RIGHT */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto z-20">
+            {/* 3D Background Quick Toggle Button */}
+            {onToggle3D && (
+              <button
+                onClick={onToggle3D}
+                type="button"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                  is3DEnabled
+                    ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700/80 shadow-amber-500/10'
+                    : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 border-stone-300 dark:border-stone-700'
+                }`}
+                title={is3DEnabled ? '3D Background Active (Click to Pause)' : '3D Background Paused (Click to Enable)'}
+              >
+                <Box className={`w-4 h-4 shrink-0 ${is3DEnabled ? 'text-amber-600 dark:text-amber-400 animate-spin-slow' : 'opacity-60'}`} />
+                <span className="hidden xl:inline font-extrabold">{is3DEnabled ? '3D Mode ON' : '3D Mode OFF'}</span>
+              </button>
+            )}
+
             {/* Account Profile / Menu Dropdown Trigger */}
             <div className="relative shrink-0">
               {currentUser ? (
                 <button
                   onClick={() => setShowUserDropdown(prev => !prev)}
                   type="button"
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 transition-all text-xs font-bold cursor-pointer shadow-xs"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 sm:py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 transition-all text-xs font-bold cursor-pointer shadow-xs"
                   title="Account Info & Tools"
                 >
                   {currentUser.photoURL ? (
@@ -171,20 +193,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {currentUser.name.charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <span className="max-w-[80px] sm:max-w-[110px] truncate font-extrabold">{currentUser.name}</span>
-                  {isAdmin && <Crown className="w-3.5 h-3.5 text-amber-600 fill-amber-600 shrink-0" />}
-                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                  <span className="max-w-[70px] sm:max-w-[110px] truncate font-extrabold">{currentUser.name}</span>
+                  {isAdmin ? (
+                    <span className="bg-amber-100 text-amber-800 text-[9px] px-1 py-0.2 rounded font-black uppercase shrink-0">ADMIN</span>
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                  )}
                 </button>
               ) : (
                 <button
-                  onClick={() => setShowUserDropdown(prev => !prev)}
+                  onClick={() => onOpenAuthModal()}
                   type="button"
                   className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl transition-all shadow-md shadow-emerald-900/20 active:scale-95 cursor-pointer shrink-0 border border-emerald-500/30"
-                  title="Menu & Login"
+                  title="Click to Log In / Sign In"
                 >
                   <User className="w-4 h-4 shrink-0" />
-                  <span className="font-black text-xs">Account & Login</span>
-                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                  <span className="font-black text-xs">Log In / Profile</span>
                 </button>
               )}
 
@@ -277,6 +301,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>Custom School Header</span>
                   </button>
 
+                  {/* 5. 3D Background Toggle */}
+                  {onToggle3D && (
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        onToggle3D();
+                      }}
+                      type="button"
+                      className="w-full flex items-center justify-between p-2 rounded-xl text-xs font-medium text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Box className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>3D Animated Background</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${is3DEnabled ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200' : 'bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400'}`}>
+                        {is3DEnabled ? 'ON' : 'OFF'}
+                      </span>
+                    </button>
+                  )}
+
                   {/* 5. Log Out or Log In */}
                   {currentUser ? (
                     <button
@@ -319,8 +363,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Mobile Navigation Row */}
-        <div className="xl:hidden flex items-center overflow-x-auto py-2 space-x-1.5 border-t border-stone-200 dark:border-stone-800 no-scrollbar px-2">
+        {/* Mobile Navigation Row - Smooth horizontal scrollbar */}
+        <div className="lg:hidden flex items-center nav-scrollbar py-2 space-x-1.5 border-t border-stone-200 dark:border-stone-800 px-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;

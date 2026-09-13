@@ -459,10 +459,17 @@ async function startServer() {
   // 4. Users: GET all
   app.get("/api/users", (req, res) => {
     const store = loadServerStore();
-    res.json({ success: true, users: store.users, deregisteredEmails: store.deregisteredEmails || [] });
+    const deregistered = new Set((store.deregisteredEmails || []).map(e => String(e).toLowerCase().trim()));
+    const activeUsers = (store.users || []).filter(u => {
+      const uEmail = u && u.email ? String(u.email).toLowerCase().trim() : '';
+      const uId = u && u.id ? String(u.id).toLowerCase().trim() : '';
+      const uName = u && u.name ? String(u.name).toLowerCase().trim() : '';
+      return !deregistered.has(uEmail) && !deregistered.has(uId) && !deregistered.has(uName);
+    });
+    res.json({ success: true, users: activeUsers, deregisteredEmails: store.deregisteredEmails || [] });
   });
 
-  // 5. Users: POST / Sync user (also clears temporary deregistered status if student re-registers / logs in)
+  // 5. Users: POST / Sync user (rejects deregistered users)
   app.post("/api/users", (req, res) => {
     try {
       const { user } = req.body;
@@ -479,12 +486,15 @@ async function startServer() {
       }
       const store = loadServerStore();
 
-      // Clear from deregistered list since student is logging in / re-registering
-      if (store.deregisteredEmails) {
-        const userKeys = new Set([rawEmail, rawId.toLowerCase(), rawName.toLowerCase()].filter(Boolean));
-        store.deregisteredEmails = store.deregisteredEmails.filter(e => {
-          const norm = e.toLowerCase().trim();
-          return !userKeys.has(norm);
+      // If user was previously deregistered, logging in or syncing immediately restores/activates them!
+      if (store.deregisteredEmails && store.deregisteredEmails.length > 0) {
+        store.deregisteredEmails = store.deregisteredEmails.filter(item => {
+          const norm = String(item || '').toLowerCase().trim();
+          if (!norm) return false;
+          if (rawEmail && (norm === rawEmail || norm.includes(rawEmail) || rawEmail.includes(norm))) return false;
+          if (rawId && (norm === rawId.toLowerCase() || norm.includes(rawId.toLowerCase()))) return false;
+          if (rawName && (norm === rawName.toLowerCase() || norm.includes(rawName.toLowerCase()))) return false;
+          return true;
         });
       }
 
@@ -502,7 +512,7 @@ async function startServer() {
         store.users.unshift(user);
       }
       saveServerStore(store);
-      res.json({ success: true, user, deregisteredEmails: store.deregisteredEmails });
+      res.json({ success: true, user, deregisteredEmails: store.deregisteredEmails || [] });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Failed to save user" });
     }
@@ -521,29 +531,83 @@ async function startServer() {
     }
   });
 
-  // 6b. Users: POST / Deregister user (temporarily deregisters student until re-registered)
+  // 6b. Users: POST / Deregister user (permanently deregisters student & purges records)
   app.post("/api/users/deregister", (req, res) => {
     try {
-      const { userId, email, userIdOrEmail } = req.body;
+      const { userId, email, name, userIdOrEmail } = req.body;
       const targetId = String(userId || userIdOrEmail || '').trim();
       const targetEmail = String(email || userIdOrEmail || '').toLowerCase().trim();
+      const targetName = String(name || '').toLowerCase().trim();
 
-      if (!targetId && !targetEmail) {
+      if (!targetId && !targetEmail && !targetName) {
         return res.status(400).json({ error: "Missing user identifiers" });
       }
 
+      const GENERIC_RESERVED_TERMS = new Set([
+        'guest',
+        'guest@examcraft.internal',
+        'guest user',
+        'guest student',
+        'student',
+        'student@examidea.internal',
+        'admin',
+        'anonymous',
+        'user'
+      ]);
+
+      const targets = new Set<string>(
+        [targetEmail, targetId, targetName, String(userIdOrEmail || '').toLowerCase().trim()]
+          .filter(Boolean)
+          .map(s => s.toLowerCase().trim())
+          .filter(s => !GENERIC_RESERVED_TERMS.has(s))
+      );
+
       const store = loadServerStore();
-      store.users = store.users.filter(u => {
+
+      // 1. Remove from store.users
+      store.users = (store.users || []).filter(u => {
         const uEmail = u.email ? String(u.email).toLowerCase().trim() : '';
-        const uId = u.id ? String(u.id).trim() : '';
-        if (targetId && uId === targetId) return false;
-        if (targetEmail && uEmail && uEmail === targetEmail) return false;
+        const uId = u.id ? String(u.id).trim().toLowerCase() : '';
+        const uName = u.name ? String(u.name).trim().toLowerCase() : '';
+        if (targetId && uId === targetId.toLowerCase()) return false;
+        if (targetEmail && uEmail === targetEmail) return false;
+        if (targets.has(uEmail) || targets.has(uId) || targets.has(uName)) return false;
         return true;
       });
 
+      // 2. Remove from store.activities
+      store.activities = (store.activities || []).filter(a => {
+        const sEmail = a.studentEmail ? String(a.studentEmail).toLowerCase().trim() : '';
+        const sId = a.studentId ? String(a.studentId).trim().toLowerCase() : '';
+        const sName = a.studentName ? String(a.studentName).trim().toLowerCase() : '';
+        if (targetEmail && sEmail === targetEmail) return false;
+        if (targetId && sId === targetId.toLowerCase()) return false;
+        if (targets.has(sEmail) || targets.has(sId) || targets.has(sName)) return false;
+        return true;
+      });
+
+      // 3. Remove from store.downloadLogs
+      store.downloadLogs = (store.downloadLogs || []).filter(l => {
+        const lEmail = l.userEmail ? String(l.userEmail).toLowerCase().trim() : '';
+        const lName = l.userName ? String(l.userName).trim().toLowerCase() : '';
+        if (targetEmail && lEmail === targetEmail) return false;
+        if (targets.has(lEmail) || targets.has(lName)) return false;
+        return true;
+      });
+
+      // 4. Remove from store.grammarResults
+      store.grammarResults = (store.grammarResults || []).filter(g => {
+        const gEmail = g.userEmail ? String(g.userEmail).toLowerCase().trim() : '';
+        const gName = g.userName ? String(g.userName).trim().toLowerCase() : '';
+        if (targetEmail && gEmail === targetEmail) return false;
+        if (targets.has(gEmail) || targets.has(gName)) return false;
+        return true;
+      });
+
+      // 5. Add to store.deregisteredEmails (ONLY specific non-generic identifiers)
       if (!store.deregisteredEmails) store.deregisteredEmails = [];
-      [targetEmail, targetId, String(userIdOrEmail || '').toLowerCase().trim()].forEach(k => {
-        if (k && k.length > 0 && !store.deregisteredEmails?.includes(k)) {
+      targets.forEach(k => {
+        if (k && !GENERIC_RESERVED_TERMS.has(k) && !store.deregisteredEmails?.includes(k)) {
           store.deregisteredEmails?.push(k);
         }
       });
@@ -656,6 +720,14 @@ async function startServer() {
         const emailNorm = String(result.userEmail).toLowerCase().trim();
         const userName = result.userName || (emailNorm.includes('guest') ? 'Guest Student' : emailNorm.split('@')[0]);
         const today = new Date().toISOString().split('T')[0];
+
+        // Active test submission clears any stale deregistration for this student!
+        if (store.deregisteredEmails && store.deregisteredEmails.length > 0) {
+          store.deregisteredEmails = store.deregisteredEmails.filter(item => {
+            const norm = String(item || '').toLowerCase().trim();
+            return norm !== emailNorm && !emailNorm.includes(norm);
+          });
+        }
 
         const existingIdx = store.users.findIndex(u => u && u.email && u.email.toLowerCase() === emailNorm);
         if (existingIdx >= 0) {
@@ -806,9 +878,15 @@ async function startServer() {
       }
       store.activities = list.slice(0, 1000);
 
-      // Auto-track student profile in store.users when receiving activity event
+      // Active student activity clears any stale deregistration for this student!
       if (activity && activity.studentEmail) {
         const rawEmail = String(activity.studentEmail).toLowerCase().trim();
+        if (store.deregisteredEmails && store.deregisteredEmails.length > 0) {
+          store.deregisteredEmails = store.deregisteredEmails.filter(item => {
+            const norm = String(item || '').toLowerCase().trim();
+            return norm !== rawEmail && !rawEmail.includes(norm);
+          });
+        }
         if (rawEmail && !rawEmail.includes('guest') && !rawEmail.includes('anonymous')) {
           const userIdx = store.users.findIndex(u => {
             const uEmail = u && u.email ? String(u.email).toLowerCase().trim() : '';
@@ -842,17 +920,56 @@ async function startServer() {
   app.get("/api/admin/all-data", (req, res) => {
     try {
       const store = loadServerStore();
+      const GENERIC_RESERVED_TERMS = new Set([
+        'guest',
+        'guest@examcraft.internal',
+        'guest user',
+        'guest student',
+        'student',
+        'student@examidea.internal',
+        'admin',
+        'anonymous',
+        'user'
+      ]);
+      const deregistered = new Set(
+        (store.deregisteredEmails || [])
+          .map(e => String(e).toLowerCase().trim())
+          .filter(e => e.length > 0 && !GENERIC_RESERVED_TERMS.has(e))
+      );
+      const activeUsers = (store.users || []).filter(u => {
+        const uEmail = u && u.email ? String(u.email).toLowerCase().trim() : '';
+        const uId = u && u.id ? String(u.id).toLowerCase().trim() : '';
+        const uName = u && u.name ? String(u.name).toLowerCase().trim() : '';
+        return !deregistered.has(uEmail) && !deregistered.has(uId) && !deregistered.has(uName);
+      });
+      const activeActivities = (store.activities || []).filter(a => {
+        const sEmail = a && a.studentEmail ? String(a.studentEmail).toLowerCase().trim() : '';
+        const sId = a && a.studentId ? String(a.studentId).toLowerCase().trim() : '';
+        const sName = a && a.studentName ? String(a.studentName).toLowerCase().trim() : '';
+        return !deregistered.has(sEmail) && !deregistered.has(sId) && !deregistered.has(sName);
+      });
+      const activeDownloadLogs = (store.downloadLogs || []).filter(l => {
+        const lEmail = l && l.userEmail ? String(l.userEmail).toLowerCase().trim() : '';
+        const lName = l && l.userName ? String(l.userName).toLowerCase().trim() : '';
+        return !deregistered.has(lEmail) && !deregistered.has(lName);
+      });
+      const activeGrammarResults = (store.grammarResults || []).filter(g => {
+        const gEmail = g && g.userEmail ? String(g.userEmail).toLowerCase().trim() : '';
+        const gName = g && g.userName ? String(g.userName).toLowerCase().trim() : '';
+        return !deregistered.has(gEmail) && !deregistered.has(gName);
+      });
+
       res.json({
         success: true,
-        users: store.users || [],
+        users: activeUsers,
         deregisteredEmails: store.deregisteredEmails || [],
         papers: Object.values(store.papers || {}),
-        grammarResults: store.grammarResults || [],
-        downloadLogs: store.downloadLogs || [],
+        grammarResults: activeGrammarResults,
+        downloadLogs: activeDownloadLogs,
         evaluatedCopies: store.evaluatedCopies || [],
         customQuestions: store.customQuestions || [],
         questionBankSets: store.questionBankSets || [],
-        activities: store.activities || []
+        activities: activeActivities
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Failed to load store data" });

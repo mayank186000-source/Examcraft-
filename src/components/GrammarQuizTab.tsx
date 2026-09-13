@@ -243,10 +243,14 @@ export const GrammarQuizTab: React.FC = () => {
       } catch {}
     }
 
+    const nowIso = new Date().toISOString();
+
     // Save Result to localStorage & Global Registry for Admin
     const newResult: SavedGrammarResult = {
       code: currentTestCode,
       date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      createdAt: nowIso,
+      timestamp: nowIso,
       classLevel: selectedClass,
       topic: selectedTopic,
       difficulty: selectedDifficulty,

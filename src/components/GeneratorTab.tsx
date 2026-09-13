@@ -80,6 +80,7 @@ interface GeneratorTabProps {
   onOpenBranding: () => void;
   onOpenPaperCodeModal: () => void;
   onOpenQuestionVault: () => void;
+  onSubjectChange?: (classLevel: string, subjectId: string) => void;
 }
 
 export const GeneratorTab: React.FC<GeneratorTabProps> = ({
@@ -88,11 +89,22 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
   branding,
   onOpenBranding,
   onOpenPaperCodeModal,
-  onOpenQuestionVault
+  onOpenQuestionVault,
+  onSubjectChange
 }) => {
   const { isAdmin } = useAuth();
   const [selectedClass, setSelectedClass] = useState<'12' | '11' | '10' | '9' | '8' | '7' | '6' | '5' | '4' | '3'>('10');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('science-086');
+
+  // Synchronize class and subject changes with 3D NCERT Animated Background
+  useEffect(() => {
+    onSubjectChange?.(selectedClass, selectedSubjectId);
+    window.dispatchEvent(
+      new CustomEvent('examcraft:subject_changed', {
+        detail: { classLevel: selectedClass, subjectId: selectedSubjectId }
+      })
+    );
+  }, [selectedClass, selectedSubjectId, onSubjectChange]);
   const [selectedStream, setSelectedStream] = useState<'All' | 'Science' | 'Commerce' | 'Arts' | 'Common'>('All');
   const [preset, setPreset] = useState<TestPreset>('board80');
   const [customPaperTitle, setCustomPaperTitle] = useState<string>('');
@@ -471,25 +483,21 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
-      {/* 1. HERO SECTION (Modern EdTech SaaS Style) */}
-      <div className="relative rounded-3xl p-8 sm:p-10 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white shadow-2xl border border-blue-800/40 overflow-hidden">
-        {/* Ambient background glow accents */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
+      {/* 1. HERO SECTION */}
+      <div className="relative py-4 sm:py-6 text-slate-900 dark:text-white">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
           {/* Left Hero Headline & Value Proposition */}
-          <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-bold tracking-wide">
-              <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <div className="lg:col-span-7 space-y-6 text-center lg:text-left hover-reveal-card p-6 sm:p-8 rounded-3xl transition-all">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-100/95 dark:bg-blue-500/25 border border-blue-300 dark:border-blue-400/40 text-blue-900 dark:text-blue-100 text-xs font-black tracking-wide shadow-xs">
+              <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse" />
               <span>Official 2025-2026 CBSE Board Blueprint Engine</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
-              CBSE Test Papers in <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400">10 Seconds</span>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-950 dark:text-white leading-tight">
+              CBSE Test Papers in <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 dark:from-blue-400 dark:via-indigo-300 dark:to-emerald-400">10 Seconds</span>
             </h1>
 
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl font-normal">
+            <p className="text-sm sm:text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-2xl font-bold">
               Trusted by 50,000+ educators and top-scoring students. Generate 100% board-compliant question papers for Classes 9th, 10th, 11th & 12th with bilingual support, case studies, and step-wise marking schemes.
             </p>
 
@@ -505,25 +513,25 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
 
               <button
                 onClick={onOpenPaperCodeModal}
-                className="w-full sm:w-auto bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 font-bold text-sm px-6 py-4 rounded-full border border-slate-700/80 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto bg-white/95 hover:bg-white dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-extrabold text-sm px-6 py-4 rounded-full border border-slate-300 dark:border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
-                <Hash className="w-4 h-4 text-amber-400" />
+                <Hash className="w-4 h-4 text-amber-500" />
                 <span>Load Paper Code</span>
               </button>
             </div>
 
             {/* Stats row */}
-            <div className="pt-4 flex items-center justify-center lg:justify-start gap-6 border-t border-slate-800/80 text-xs text-slate-300">
+            <div className="pt-4 flex items-center justify-center lg:justify-start gap-6 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 font-extrabold">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>100% CBSE Aligned</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Bilingual (English & Hindi)</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Step-Wise Solutions</span>
               </div>
             </div>
@@ -531,9 +539,9 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
 
           {/* Right Interactive Mockup Visual Element (Auto-changing 4 Sample Slides) */}
           <div className="lg:col-span-5">
-            <div className="edtech-card bg-slate-900/90 border-slate-700/80 p-5 rounded-2xl shadow-2xl relative space-y-4">
+            <div className="hover-reveal-card p-5 sm:p-6 rounded-2xl relative space-y-4 transition-all">
               {/* Card Top Bar with Slide Counter */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
@@ -652,11 +660,8 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
           </div>
         </div>
 
-        {/* Dynamic Auto-Rotating Trust Feature Card (3.5s interval) */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-8 shadow-xl border border-blue-900/60 min-h-[190px]">
-          {/* Background Ambient Glow */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
-
+        {/* Dynamic Auto-Rotating Trust Feature (3.5s interval) */}
+        <div className="relative py-4 px-6 rounded-2xl hover-reveal-card transition-all min-h-[170px]">
           {(() => {
             const currentFeature = trustFeatureSlides[trustSlide];
             const FeatureIcon = currentFeature.icon;
@@ -666,19 +671,19 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                 className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-all duration-300 animate-in fade-in zoom-in-95"
               >
                 <div className="space-y-3 max-w-2xl">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-amber-300 text-[11px] font-black tracking-wider uppercase">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-700 dark:text-amber-300 text-[11px] font-black tracking-wider uppercase">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-amber-300" />
                     <span>{currentFeature.badge}</span>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-blue-600/30 border border-blue-400/40 text-blue-200 shrink-0">
-                      <FeatureIcon className="w-6 h-6 text-amber-300" />
+                    <div className="p-2.5 rounded-xl bg-blue-600/15 border border-blue-400/40 text-blue-600 dark:text-blue-300 shrink-0">
+                      <FeatureIcon className="w-6 h-6 text-blue-600 dark:text-amber-300" />
                     </div>
-                    <h3 className="text-xl sm:text-2xl font-black text-white">{currentFeature.title}</h3>
+                    <h3 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white">{currentFeature.title}</h3>
                   </div>
 
-                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
+                  <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-bold">
                     {currentFeature.desc}
                   </p>
 
@@ -686,9 +691,9 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                     {currentFeature.tags.map((tag, tIdx) => (
                       <span 
                         key={tIdx}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-[11px] font-black"
                       >
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" /> {tag}
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> {tag}
                       </span>
                     ))}
                   </div>
@@ -703,8 +708,8 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                       onClick={() => setTrustSlide(idx)}
                       className={`transition-all cursor-pointer rounded-full ${
                         trustSlide === idx 
-                          ? 'w-8 md:w-3 h-3 md:h-8 bg-gradient-to-r md:bg-gradient-to-b from-amber-400 to-emerald-400' 
-                          : 'w-3 h-3 bg-slate-700 hover:bg-slate-600'
+                          ? 'w-8 md:w-3 h-3 md:h-8 bg-gradient-to-r md:bg-gradient-to-b from-blue-600 to-emerald-500' 
+                          : 'w-3 h-3 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600'
                       }`}
                       title={`Go to point ${idx + 1}`}
                     />
@@ -716,19 +721,18 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
         </div>
       </div>
 
-      {/* OCR SCANNER BANNER CARD */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 p-6 sm:p-8 text-white shadow-2xl border border-purple-500/30">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
+      {/* OCR SCANNER BANNER */}
+      <div className="relative py-5 px-6 rounded-2xl hover-reveal-card transition-all border border-slate-200/80 dark:border-slate-800/80">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30 text-xs font-bold uppercase tracking-wider">
-              <Camera className="w-3.5 h-3.5 text-purple-300" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-400/30 text-xs font-black uppercase tracking-wider">
+              <Camera className="w-3.5 h-3.5 text-purple-600 dark:text-purple-300" />
               <span>Multimodal AI Paper OCR Scanner</span>
             </div>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+            <h3 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 dark:text-white">
               Scan & Convert Printed / Handwritten Questions
             </h3>
-            <p className="text-xs sm:text-sm text-purple-200/90 leading-relaxed font-normal">
+            <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-bold">
               Snap a live camera photo or upload an image of paper questions. Gemini AI automatically parses text, options, subject, chapter, and marking scheme directly into QuestionVault.
             </p>
           </div>
@@ -877,31 +881,31 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   setSelectedSubjectId(cItem.defaultSub);
                   setSelectedChapters([]);
                 }}
-                className={`edtech-card p-3 sm:p-5 text-left cursor-pointer transition-all relative overflow-hidden ${
+                className={`p-3 sm:p-5 text-left cursor-pointer transition-all relative rounded-2xl ${
                   isSelected
-                    ? 'border-2 border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 shadow-lg shadow-blue-600/10'
-                    : 'hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
+                    ? 'ring-2 ring-blue-600 bg-blue-500/20 shadow-md'
+                    : 'hover-reveal-card'
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-2.5 right-2.5 text-blue-600 dark:text-blue-400">
+                  <div className="absolute top-2.5 right-2.5 text-blue-600 dark:text-blue-400 z-10">
                     <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 fill-blue-100 dark:fill-blue-950" />
                   </div>
                 )}
-                <span className={`text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                <span className={`text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full border ${
                   isSelected
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700'
                 }`}>
                   {cItem.badge}
                 </span>
 
-                <h3 className="text-base sm:text-xl font-extrabold text-slate-900 dark:text-white mt-2 sm:mt-3">{cItem.title}</h3>
-                <p className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 mt-0.5 sm:mt-1 line-clamp-2">{cItem.subjects}</p>
+                <h3 className="text-base sm:text-xl font-black text-slate-950 dark:text-white mt-2 sm:mt-3">{cItem.title}</h3>
+                <p className="text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 sm:mt-1 line-clamp-2">{cItem.subjects}</p>
 
-                <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 gap-1">
+                <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between text-[10px] sm:text-[11px] font-bold text-slate-700 dark:text-slate-300 gap-1">
                   <span>{cItem.chapters}</span>
-                  <span className="text-blue-600 dark:text-blue-400 font-bold">{cItem.marks}</span>
+                  <span className="text-blue-600 dark:text-blue-400 font-black">{cItem.marks}</span>
                 </div>
               </button>
             );
@@ -985,32 +989,32 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                         setSelectedSubjectId(sub.id);
                         setSelectedChapters([]);
                       }}
-                      className={`p-3 sm:p-3.5 rounded-2xl border text-left transition-all relative cursor-pointer ${
+                      className={`p-3 sm:p-3.5 rounded-2xl text-left transition-all relative cursor-pointer ${
                         isSelected
-                          ? 'border-2 border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-slate-900 dark:text-white shadow-sm'
-                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                          ? 'ring-2 ring-blue-600 bg-blue-50/90 dark:bg-blue-950/80 shadow-md text-slate-950 dark:text-white'
+                          : 'hover-reveal-card text-slate-900 dark:text-slate-100'
                       }`}
                     >
                       {isSelected && (
                         <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 absolute top-2.5 right-2.5" />
                       )}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                        <span className="text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
                           Code {sub.code}
                         </span>
                         {sub.stream && (
-                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                            sub.stream === 'Science' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300' :
-                            sub.stream === 'Commerce' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                            sub.stream === 'Arts' ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300' :
-                            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                            sub.stream === 'Science' ? 'bg-cyan-100 text-cyan-900 dark:bg-cyan-950 dark:text-cyan-200' :
+                            sub.stream === 'Commerce' ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200' :
+                            sub.stream === 'Arts' ? 'bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-200' :
+                            'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
                           }`}>
                             {sub.stream}
                           </span>
                         )}
                       </div>
-                      <h4 className="font-extrabold text-xs mt-1.5 sm:mt-2 truncate">{sub.name}</h4>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{sub.totalChapters} Ch • {sub.standardMarks} Marks</p>
+                      <h4 className="font-black text-xs mt-1.5 sm:mt-2 truncate text-slate-950 dark:text-white">{sub.name}</h4>
+                      <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-0.5">{sub.totalChapters} Ch • {sub.standardMarks} Marks</p>
                     </button>
                   );
                 })}
@@ -1040,23 +1044,23 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                       key={key}
                       type="button"
                       onClick={() => setPreset(key)}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      className={`p-3.5 rounded-2xl text-left transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-2 border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 shadow-sm'
-                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
+                          ? 'ring-2 ring-blue-600 bg-blue-50/90 dark:bg-blue-950/80 shadow-md'
+                          : 'hover-reveal-card'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-blue-700 dark:text-blue-300 text-sm">
+                        <span className="font-black text-blue-700 dark:text-blue-300 text-sm">
                           {key === 'custom' ? `${customMarksInput}M` : `${pInfo.marks} Marks`}
                         </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] text-slate-700 dark:text-slate-300 font-bold flex items-center gap-0.5 bg-slate-200/80 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                           <Clock className="w-3 h-3" />
                           {key === 'custom' ? `${customDurationInput}m` : `${pInfo.time}m`}
                         </span>
                       </div>
-                      <h4 className="font-bold text-xs mt-2 text-slate-900 dark:text-white">{key === 'custom' ? 'Custom Marks' : pInfo.title}</h4>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">{pInfo.desc}</p>
+                      <h4 className="font-black text-xs mt-2 text-slate-950 dark:text-white">{key === 'custom' ? 'Custom Marks' : pInfo.title}</h4>
+                      <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-1 leading-tight">{pInfo.desc}</p>
                     </button>
                   );
                 })}
@@ -1139,10 +1143,10 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                     <div
                       key={ch.id}
                       onClick={() => handleChapterToggle(ch.id)}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${
+                      className={`p-3 rounded-xl transition-all cursor-pointer flex items-start gap-2.5 ${
                         isChecked
-                          ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-400 dark:border-blue-700 text-slate-900 dark:text-white'
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                          ? 'bg-blue-50/90 dark:bg-blue-950/80 ring-1 ring-blue-500/50 text-slate-950 dark:text-white shadow-xs'
+                          : 'hover-reveal-card text-slate-900 dark:text-slate-100'
                       }`}
                     >
                       <input
@@ -1153,10 +1157,10 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                       />
                       <div className="flex-1 min-w-0 text-xs">
                         <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[10px] text-blue-700 dark:text-blue-300">Ch {ch.number}</span>
-                          <span className="text-[10px] font-semibold text-slate-400">~{ch.unitWeightageMarks}M</span>
+                          <span className="font-black text-[10px] text-blue-700 dark:text-blue-300">Ch {ch.number}</span>
+                          <span className="text-[10px] font-black text-slate-700 dark:text-slate-300">~{ch.unitWeightageMarks}M</span>
                         </div>
-                        <p className="font-bold truncate mt-0.5">{ch.title}</p>
+                        <p className="font-black truncate mt-0.5 text-slate-950 dark:text-white">{ch.title}</p>
                       </div>
                     </div>
                   );
@@ -1177,9 +1181,9 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+                <div className="flex items-center justify-between text-xs font-black text-slate-950 dark:text-slate-100">
                   <span>Competency / Case-Based Ratio:</span>
-                  <span className="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                  <span className="text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950 px-2.5 py-0.5 rounded border border-blue-300 dark:border-blue-800 font-black">
                     {competencyRatio}% Competency
                   </span>
                 </div>
@@ -1190,12 +1194,12 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   step="5"
                   value={competencyRatio}
                   onChange={(e) => setCompetencyRatio(Number(e.target.value))}
-                  className="w-full accent-blue-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                  className="w-full accent-blue-600 cursor-pointer h-2 bg-slate-300 dark:bg-slate-700 rounded-lg"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
-                <label className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <label className="flex items-center gap-2 p-3 hover-reveal-card rounded-xl cursor-pointer text-xs font-black text-slate-950 dark:text-white">
                   <input
                     type="checkbox"
                     checked={includeGeneralInstructions}
@@ -1204,7 +1208,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   />
                   <span>General Instructions</span>
                 </label>
-                <label className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <label className="flex items-center gap-2 p-3 hover-reveal-card rounded-xl cursor-pointer text-xs font-black text-slate-950 dark:text-white">
                   <input
                     type="checkbox"
                     checked={includeSolutions}
@@ -1219,34 +1223,34 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
 
           {/* Right Column: Summary & CTA */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="edtech-card p-6 space-y-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white border-blue-900 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300">Blueprint Summary</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
+            <div className="hover-reveal-card p-6 rounded-3xl space-y-5 relative transition-all">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 relative z-10">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-100">Blueprint Summary</span>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-400/40">
                   100% CBSE
                 </span>
               </div>
 
-              <div className="space-y-2.5 text-xs text-slate-300">
-                <div className="flex justify-between py-1 border-b border-slate-800">
+              <div className="space-y-2.5 text-xs text-slate-800 dark:text-slate-200 font-bold">
+                <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
                   <span>Class:</span>
-                  <span className="font-bold text-white">Class {selectedClass}th</span>
+                  <span className="font-black text-slate-950 dark:text-white">Class {selectedClass}th</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-800">
+                <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
                   <span>Subject:</span>
-                  <span className="font-bold text-white">{currentSubject.name} ({currentSubject.code})</span>
+                  <span className="font-black text-slate-950 dark:text-white">{currentSubject.name} ({currentSubject.code})</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-800">
+                <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
                   <span>Target Marks:</span>
-                  <span className="font-bold text-amber-300">{activePresetInfo.marks} Marks</span>
+                  <span className="font-black text-blue-700 dark:text-amber-300">{activePresetInfo.marks} Marks</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-800">
+                <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
                   <span>Duration:</span>
-                  <span className="font-bold text-white">{activePresetInfo.time} Minutes</span>
+                  <span className="font-black text-slate-950 dark:text-white">{activePresetInfo.time} Minutes</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-800">
+                <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
                   <span>Chapters:</span>
-                  <span className="font-bold text-white">
+                  <span className="font-black text-slate-950 dark:text-white">
                     {selectedChapters.length === 0 ? `All ${currentSubject.chapters.length}` : `${selectedChapters.length} Selected`}
                   </span>
                 </div>
@@ -1276,7 +1280,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   type="button"
                   onClick={() => handleSubmit('vault_remix')}
                   disabled={isGenerating}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-3 px-4 rounded-full border border-slate-700 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-100 font-black text-xs py-3.5 px-4 rounded-full border border-slate-700 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
                 >
                   <Database className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Instant Vault Remix (&lt; 1s)</span>

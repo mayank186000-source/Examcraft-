@@ -2,14 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Helper functions
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    // Connection test collection
+    match /test/{testId} {
+      allow read: if true;
     }
 
     // Student Activities Log Collection
@@ -45,6 +45,11 @@ service cloud.firestore {
     // Saved Question Papers Collection
     match /saved_papers/{paperId} {
       allow read, create, update, delete: if true;
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

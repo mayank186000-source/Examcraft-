@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // Fallback
     }
-    // Seed initial users for realism
+    // Seed initial Super Admin user
     return [
       {
         id: 'usr-admin-1',
@@ -102,30 +102,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastDownloadDate: new Date().toISOString().split('T')[0],
         totalDownloads: 14,
         createdAt: '2026-08-01T10:00:00.000Z'
-      },
-      {
-        id: 'usr-stud-1',
-        name: 'Aarav Sharma (Student)',
-        email: 'aarav.sharma@gmail.com',
-        role: 'student',
-        photoURL: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=faces',
-        dailyQuotaLimit: 5,
-        dailyDownloadsUsed: 2,
-        lastDownloadDate: new Date().toISOString().split('T')[0],
-        totalDownloads: 7,
-        createdAt: '2026-08-10T14:30:00.000Z'
-      },
-      {
-        id: 'usr-stud-2',
-        name: 'Priya Verma (Student)',
-        email: 'priya.v10@gmail.com',
-        role: 'student',
-        photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=faces',
-        dailyQuotaLimit: 5,
-        dailyDownloadsUsed: 1,
-        lastDownloadDate: new Date().toISOString().split('T')[0],
-        totalDownloads: 4,
-        createdAt: '2026-08-12T09:15:00.000Z'
       }
     ];
   });
@@ -225,56 +201,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const cleaned = data.deregisteredEmails
                 .map((e: string) => e.toLowerCase().trim())
                 .filter((e: string) => e && !GENERIC_RESERVED.has(e));
-              setDeregisteredUserEmails(cleaned);
+              setDeregisteredUserEmails(prev => {
+                const combined = Array.from(new Set([...prev, ...cleaned])).filter(e => !GENERIC_RESERVED.has(e));
+                try {
+                  localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(combined));
+                } catch {}
+                return combined;
+              });
             }
 
-            // 1. Sync All Users
+            // 1. Sync All Users (from server without resurrecting deleted users)
             if (Array.isArray(data.users)) {
-              setAllUsers(prev => {
+              const serverDeregList = Array.isArray(data.deregisteredEmails) ? data.deregisteredEmails : [];
+              const deregSet = new Set(
+                [...serverDeregList, ...deregisteredUserEmails]
+                  .map((e: string) => String(e).toLowerCase().trim())
+                  .filter((e: string) => e && !GENERIC_RESERVED.has(e))
+              );
+
+              setAllUsers(() => {
                 const map = new Map<string, User>();
                 data.users.forEach((u: User) => {
                   const email = (u.email || '').toLowerCase().trim();
                   const id = (u.id || '').toLowerCase().trim();
-                  const key = email || id || (u.name || '').toLowerCase().trim();
-                  if (key) map.set(key, u);
-                });
-                prev.forEach(u => {
-                  const email = (u.email || '').toLowerCase().trim();
-                  const id = (u.id || '').toLowerCase().trim();
-                  const key = email || id || (u.name || '').toLowerCase().trim();
-                  if (key) {
-                    if (map.has(key)) {
-                      const existingRemote = map.get(key)!;
-                      map.set(key, {
-                        ...existingRemote,
-                        ...u,
-                        email: u.email || existingRemote.email,
-                        name: u.name || existingRemote.name,
-                        dailyQuotaLimit: Math.max(existingRemote.dailyQuotaLimit ?? 5, u.dailyQuotaLimit ?? 5),
-                        totalDownloads: Math.max(existingRemote.totalDownloads ?? 0, u.totalDownloads ?? 0),
-                        role: (existingRemote.role === 'admin' || u.role === 'admin') ? 'admin' : 'student'
-                      });
-                    } else {
-                      map.set(key, u);
-                      syncUserToServer(u);
-                    }
+                  const name = (u.name || '').toLowerCase().trim();
+                  const key = email || id || name;
+                  if (key && !deregSet.has(email) && !deregSet.has(id) && !deregSet.has(name)) {
+                    map.set(key, u);
                   }
                 });
-                return Array.from(map.values());
+                const cleanList = Array.from(map.values());
+                try {
+                  localStorage.setItem('examidea_all_users', JSON.stringify(cleanList));
+                } catch {}
+                return cleanList;
               });
             }
 
             // 2. Sync Download Logs
             if (Array.isArray(data.downloadLogs)) {
-              setDownloadLogs(prev => {
+              const serverDeregList = Array.isArray(data.deregisteredEmails) ? data.deregisteredEmails : [];
+              const deregSet = new Set(
+                [...serverDeregList, ...deregisteredUserEmails]
+                  .map((e: string) => String(e).toLowerCase().trim())
+                  .filter((e: string) => e && !GENERIC_RESERVED.has(e))
+              );
+
+              setDownloadLogs(() => {
                 const map = new Map<string, DownloadRecord>();
-                prev.forEach(l => map.set(l.id, l));
                 data.downloadLogs.forEach((l: DownloadRecord) => {
-                  if (l.id) {
+                  const lEmail = (l.userEmail || '').toLowerCase().trim();
+                  const lName = (l.userName || '').toLowerCase().trim();
+                  if (l.id && !deregSet.has(lEmail) && !deregSet.has(lName)) {
                     map.set(l.id, l);
                   }
                 });
-                return Array.from(map.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                const list = Array.from(map.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                try {
+                  localStorage.setItem('examidea_download_logs', JSON.stringify(list));
+                } catch {}
+                return list;
               });
             }
           }
@@ -298,17 +284,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(remoteUsers)) {
         setAllUsers(prev => {
           const map = new Map<string, User>();
+          const deregSet = new Set((deregisteredUserEmails || []).map(e => String(e).toLowerCase().trim()));
           remoteUsers.forEach(u => {
             const email = (u.email || '').toLowerCase().trim();
             const id = (u.id || '').toLowerCase().trim();
-            const key = email || id || u.name;
-            if (key) map.set(key, u);
+            const name = (u.name || '').toLowerCase().trim();
+            const key = email || id || name;
+            if (key && !deregSet.has(email) && !deregSet.has(id) && !deregSet.has(name)) {
+              map.set(key, u);
+            }
           });
           prev.forEach(u => {
             const email = (u.email || '').toLowerCase().trim();
             const id = (u.id || '').toLowerCase().trim();
-            const key = email || id || u.name;
-            if (key && !map.has(key)) {
+            const name = (u.name || '').toLowerCase().trim();
+            const key = email || id || name;
+            if (key && !deregSet.has(email) && !deregSet.has(id) && !deregSet.has(name) && !map.has(key)) {
               map.set(key, u);
             }
           });
@@ -317,7 +308,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [deregisteredUserEmails]);
 
   // Synchronize state to localStorage
   useEffect(() => {
@@ -435,12 +426,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Clear student from deregistered list if re-registering or logging in
     if (normalizedEmail) {
-      setDeregisteredUserEmails(prev => prev.filter(e => e.toLowerCase().trim() !== normalizedEmail));
-      fetch('/api/users/re-register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: normalizedEmail })
-      }).catch(() => {});
+      setDeregisteredUserEmails(prev => prev.filter(e => {
+        const normE = e.toLowerCase().trim();
+        return normE !== normalizedEmail && !normE.includes(normalizedEmail) && !normalizedEmail.includes(normE);
+      }));
+
+      try {
+        const savedDereg = localStorage.getItem('examidea_deregistered_user_emails');
+        if (savedDereg) {
+          const parsed = JSON.parse(savedDereg);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((item: string) => {
+              const normI = String(item).toLowerCase().trim();
+              return normI !== normalizedEmail && !normI.includes(normalizedEmail) && !normalizedEmail.includes(normI);
+            });
+            localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(filtered));
+          }
+        }
+      } catch {}
+
+      try {
+        await fetch('/api/users/re-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalizedEmail, name: nameToUse })
+        });
+      } catch {}
     }
 
     const role: UserRole = isEmailAdmin(normalizedEmail) ? 'admin' : 'student';
@@ -754,8 +765,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updated = prev.filter(u => {
         const uEmail = (u.email || '').toLowerCase().trim();
         const uId = (u.id || '').toLowerCase().trim();
+        const uName = (u.name || '').toLowerCase().trim();
         if (targetId && uId === targetId.toLowerCase().trim()) return false;
-        if (targetEmail && uEmail && uEmail === targetEmail) return false;
+        if (targetEmail && uEmail === targetEmail) return false;
+        if (userObj?.name && uName === userObj.name.toLowerCase().trim()) return false;
         return true;
       });
       try {
@@ -764,14 +777,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
+    // Also filter out target user from downloadLogs state
+    setDownloadLogs(prev => {
+      const updated = prev.filter(l => {
+        const lEmail = (l.userEmail || '').toLowerCase().trim();
+        const lName = (l.userName || '').toLowerCase().trim();
+        if (targetEmail && lEmail === targetEmail) return false;
+        if (userObj?.name && lName === userObj.name.toLowerCase().trim()) return false;
+        return true;
+      });
+      try {
+        localStorage.setItem('examidea_download_logs', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     // Add specific user identifiers (email, id, raw input) to deregistered list
+    const nameKey = userObj?.name ? userObj.name.toLowerCase().trim() : '';
+    const emailDocId = targetEmail.replace(/[^a-zA-Z0-9]/g, '_');
     const keysToAdd = [
       targetEmail,
       targetId,
+      nameKey,
+      emailDocId,
+      `usr-${emailDocId}`,
       userIdOrEmail.toLowerCase().trim()
-    ].filter(k => k.length > 0 && k !== PRIMARY_OWNER_EMAIL.toLowerCase() && !GENERIC_RESERVED.has(k));
+    ].filter(k => k && k.length > 0 && k !== PRIMARY_OWNER_EMAIL.toLowerCase() && !GENERIC_RESERVED.has(k));
 
-    setDeregisteredUserEmails(prev => Array.from(new Set([...prev, ...keysToAdd])).filter(k => !GENERIC_RESERVED.has(k)));
+    setDeregisteredUserEmails(prev => {
+      const combined = Array.from(new Set([...prev, ...keysToAdd])).filter(k => !GENERIC_RESERVED.has(k));
+      try {
+        localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(combined));
+      } catch {}
+      return combined;
+    });
 
     // Revoke VIP if granted
     if (targetEmail) {
@@ -779,9 +818,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Delete user from Firestore by exact ID, email, name
-    if (targetId) await deleteUserFromFirestore(targetId);
-    if (targetEmail) await deleteUserFromFirestore(targetEmail);
-    if (userObj?.name) await deleteUserFromFirestore(userObj.name);
+    try {
+      if (targetId) await deleteUserFromFirestore(targetId);
+      if (targetEmail) await deleteUserFromFirestore(targetEmail);
+      if (userObj?.name) await deleteUserFromFirestore(userObj.name);
+    } catch (e) {
+      console.warn('Firestore delete user error:', e);
+    }
 
     // Server API call to deregister
     try {
@@ -791,6 +834,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({
           userId: targetId,
           email: targetEmail,
+          name: userObj?.name || '',
           userIdOrEmail
         })
       });

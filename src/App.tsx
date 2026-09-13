@@ -17,6 +17,8 @@ import { QuestionVaultModal } from './components/QuestionVaultModal';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { SharePaperModal } from './components/SharePaperModal';
 import { FloatingPen } from './components/FloatingPen';
+import { ThreeBackground } from './components/ThreeBackground';
+import { useAmbientTimeLighting } from './hooks/useAmbientTimeLighting';
 import { useAuth } from './context/AuthContext';
 
 import { PaperConfig, GeneratedPaper, CustomBranding, Question } from './types';
@@ -113,6 +115,45 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalMessage, setAuthModalMessage] = useState<string | undefined>(undefined);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState<boolean>(false);
+
+  // 3D Animated Background Toggle State
+  const [is3DEnabled, setIs3DEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('examcraft_3d_bg');
+      return saved !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  // Current selected class and subject for dynamic 3D NCERT diagram background
+  const [currentBgClass, setCurrentBgClass] = useState<string>('10');
+  const [currentBgSubjectId, setCurrentBgSubjectId] = useState<string>('science-086');
+
+  // Detects local time to smoothly adjust ambient lighting (daylight energetic to night warm low-contrast)
+  const ambientLighting = useAmbientTimeLighting();
+
+  // Sync background subject when navigating to language/grammar tab
+  useEffect(() => {
+    if (activeTab === 'grammar') {
+      setCurrentBgSubjectId('english-184');
+      window.dispatchEvent(
+        new CustomEvent('examcraft:subject_changed', {
+          detail: { classLevel: currentBgClass, subjectId: 'english-184' }
+        })
+      );
+    }
+  }, [activeTab, currentBgClass]);
+
+  const handleToggle3D = () => {
+    setIs3DEnabled(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('examcraft_3d_bg', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const handleOpenAuthModal = (message?: string) => {
     setAuthModalMessage(message);
@@ -376,11 +417,30 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col selection:bg-blue-600 selection:text-white print:bg-white transition-colors duration-200 bg-ambient-mesh relative w-full max-w-full overflow-x-auto">
-      {/* Decorative 3D Ambient Lighting Auras */}
-      <div className="pointer-events-none fixed top-0 left-1/4 -translate-x-1/2 w-[550px] h-[550px] bg-blue-600/15 dark:bg-blue-600/20 rounded-full blur-3xl -z-10 animate-pulse" style={{ animationDuration: '8s' }} />
-      <div className="pointer-events-none fixed top-1/3 right-10 w-[450px] h-[450px] bg-amber-500/12 dark:bg-amber-500/18 rounded-full blur-3xl -z-10 animate-pulse" style={{ animationDuration: '10s' }} />
-      <div className="pointer-events-none fixed bottom-10 left-10 w-[400px] h-[400px] bg-indigo-500/12 dark:bg-indigo-500/18 rounded-full blur-3xl -z-10" />
+    <div
+      className="min-h-screen bg-slate-50/60 dark:bg-slate-950/70 text-slate-900 dark:text-slate-100 font-sans flex flex-col selection:bg-blue-600 selection:text-white print:bg-white transition-colors duration-500 bg-ambient-mesh relative w-full max-w-full overflow-x-auto"
+      style={ambientLighting.meshStyle}
+    >
+      {/* 3D Animated Canvas Background (Particles Wave + Floating Geometric Shapes + NCERT Diagrams) */}
+      <ThreeBackground
+        enabled={is3DEnabled}
+        classLevel={currentBgClass}
+        subjectId={currentBgSubjectId}
+        isNight={ambientLighting.isNight}
+      />
+
+      {/* Time-Adaptive Decorative Ambient Lighting Auras */}
+      <div
+        className={`pointer-events-none fixed top-0 left-1/4 -translate-x-1/2 rounded-full blur-3xl -z-10 animate-pulse transition-all duration-1000 ${ambientLighting.auraTopClass}`}
+        style={{ animationDuration: '8s' }}
+      />
+      <div
+        className={`pointer-events-none fixed top-1/3 right-10 rounded-full blur-3xl -z-10 animate-pulse transition-all duration-1000 ${ambientLighting.auraRightClass}`}
+        style={{ animationDuration: '10s' }}
+      />
+      <div
+        className={`pointer-events-none fixed bottom-10 left-10 rounded-full blur-3xl -z-10 transition-all duration-1000 ${ambientLighting.auraBottomClass}`}
+      />
 
       {/* Navigation Bar */}
       <Navbar
@@ -395,6 +455,8 @@ export default function App() {
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
         generatedPaperCount={generatedPaper ? 1 : 0}
         customCartCount={customCart.length}
+        is3DEnabled={is3DEnabled}
+        onToggle3D={handleToggle3D}
       />
 
       {/* Main Tab Content */}
@@ -407,6 +469,10 @@ export default function App() {
             onOpenBranding={() => setIsBrandingOpen(true)}
             onOpenPaperCodeModal={() => setIsPaperCodeModalOpen(true)}
             onOpenQuestionVault={() => setIsQuestionVaultOpen(true)}
+            onSubjectChange={(cls, subId) => {
+              setCurrentBgClass(cls);
+              setCurrentBgSubjectId(subId);
+            }}
           />
         )}
 

@@ -8,7 +8,7 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
   }, firebaseConfig.firestoreDatabaseId);
 } catch (e) {
   firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
