@@ -116,7 +116,7 @@ export const SyllabusBlueprintTab: React.FC = () => {
         
         {/* Left: Units & Chapters List */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-2xl p-6 border border-stone-200 shadow-sm space-y-6">
+          <div className="edtech-card rounded-2xl p-6 space-y-6">
             <div className="flex items-center justify-between border-b border-stone-200 pb-4">
               <div>
                 <h2 className="text-lg font-bold text-stone-900">{currentSubject.name} Syllabus Breakdown</h2>
@@ -184,7 +184,7 @@ export const SyllabusBlueprintTab: React.FC = () => {
 
         {/* Right: Official Question Typology Matrix */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-2xl p-6 border border-stone-200 shadow-sm space-y-5">
+          <div className="edtech-card rounded-2xl p-6 space-y-5">
             <h3 className="font-bold text-stone-900 text-base flex items-center gap-2">
               <Award className="w-5 h-5 text-emerald-700" />
               <span>CBSE Question Typology Matrix</span>

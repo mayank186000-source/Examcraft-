@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { User, UserRole, DownloadRecord } from '../types';
+import { getOrCreateGuestId, getOrCreateGuestEmail } from '../utils/guestTracker';
 import {
   syncUserToFirestore,
   subscribeToFirestoreUsers,
@@ -169,7 +170,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return [];
   });
 
+  const deregisteredUserEmailsRef = useRef<string[]>(deregisteredUserEmails);
   useEffect(() => {
+    deregisteredUserEmailsRef.current = deregisteredUserEmails;
     try {
       localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(deregisteredUserEmails));
     } catch {}
@@ -203,6 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 .filter((e: string) => e && !GENERIC_RESERVED.has(e));
               setDeregisteredUserEmails(prev => {
                 const combined = Array.from(new Set([...prev, ...cleaned])).filter(e => !GENERIC_RESERVED.has(e));
+                deregisteredUserEmailsRef.current = combined;
                 try {
                   localStorage.setItem('examidea_deregistered_user_emails', JSON.stringify(combined));
                 } catch {}
@@ -214,20 +218,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (Array.isArray(data.users)) {
               const serverDeregList = Array.isArray(data.deregisteredEmails) ? data.deregisteredEmails : [];
               const deregSet = new Set(
-                [...serverDeregList, ...deregisteredUserEmails]
+                [...serverDeregList, ...deregisteredUserEmailsRef.current]
                   .map((e: string) => String(e).toLowerCase().trim())
                   .filter((e: string) => e && !GENERIC_RESERVED.has(e))
               );
 
-              setAllUsers(() => {
+              setAllUsers((prevUsers) => {
                 const map = new Map<string, User>();
-                data.users.forEach((u: User) => {
+                (prevUsers || []).forEach((u: User) => {
                   const email = (u.email || '').toLowerCase().trim();
                   const id = (u.id || '').toLowerCase().trim();
                   const name = (u.name || '').toLowerCase().trim();
                   const key = email || id || name;
                   if (key && !deregSet.has(email) && !deregSet.has(id) && !deregSet.has(name)) {
                     map.set(key, u);
+                  }
+                });
+                data.users.forEach((u: User) => {
+                  const email = (u.email || '').toLowerCase().trim();
+                  const id = (u.id || '').toLowerCase().trim();
+                  const name = (u.name || '').toLowerCase().trim();
+                  const key = email || id || name;
+                  if (key && !deregSet.has(email) && !deregSet.has(id) && !deregSet.has(name)) {
+                    map.set(key, { ...map.get(key), ...u });
                   }
                 });
                 const cleanList = Array.from(map.values());
@@ -242,7 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (Array.isArray(data.downloadLogs)) {
               const serverDeregList = Array.isArray(data.deregisteredEmails) ? data.deregisteredEmails : [];
               const deregSet = new Set(
-                [...serverDeregList, ...deregisteredUserEmails]
+                [...serverDeregList, ...deregisteredUserEmailsRef.current]
                   .map((e: string) => String(e).toLowerCase().trim())
                   .filter((e: string) => e && !GENERIC_RESERVED.has(e))
               );
@@ -309,6 +322,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     return () => unsubscribe();
   }, [deregisteredUserEmails]);
+
+  // Validate Firebase Auth state against unique user record instead of shared session key
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser && fbUser.email) {
+        const normEmail = fbUser.email.toLowerCase().trim();
+        const isDeregistered = deregisteredUserEmails.some(
+          e => e.toLowerCase().trim() === normEmail || normEmail.includes(e.toLowerCase().trim())
+        );
+
+        if (isDeregistered) {
+          signOut(auth).catch(() => {});
+          setCurrentUser(null);
+          try {
+            localStorage.removeItem('examidea_current_user');
+            localStorage.removeItem('examcraft_auth_user');
+          } catch {}
+          return;
+        }
+
+        // Validate user identity against unique record
+        const uniqueId = `usr-${normEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const isAdm = adminEmails.some(a => a.toLowerCase().trim() === normEmail);
+        const isVip = unlimitedVipEmails.some(v => v.toLowerCase().trim() === normEmail);
+        const role: UserRole = isAdm ? 'admin' : 'student';
+
+        const existing = allUsers.find(u => u.email.toLowerCase().trim() === normEmail);
+        const validatedUser: User = {
+          id: existing?.id || uniqueId,
+          name: fbUser.displayName || existing?.name || (isAdm ? 'Mukesh (Admin)' : normEmail.split('@')[0]),
+          email: normEmail,
+          role: role,
+          photoURL: fbUser.photoURL || existing?.photoURL || (isAdm
+            ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces'
+            : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces'),
+          dailyQuotaLimit: (isAdm || isVip) ? 999999 : (existing?.dailyQuotaLimit || DEFAULT_STUDENT_DAILY_QUOTA),
+          dailyDownloadsUsed: existing?.lastDownloadDate === new Date().toISOString().split('T')[0] ? existing.dailyDownloadsUsed : 0,
+          lastDownloadDate: new Date().toISOString().split('T')[0],
+          totalDownloads: existing?.totalDownloads || 0,
+          createdAt: existing?.createdAt || new Date().toISOString()
+        };
+
+        setCurrentUser(validatedUser);
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, [adminEmails, unlimitedVipEmails, deregisteredUserEmails]);
 
   // Synchronize state to localStorage
   useEffect(() => {
@@ -557,8 +619,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setCurrentUser(null);
     try {
-      localStorage.removeItem('examidea_current_user');
-      localStorage.removeItem('examcraft_auth_user');
+      if (auth) {
+        signOut(auth).catch(() => {});
+      }
+    } catch {}
+
+    const sessionKeys = [
+      'examidea_current_user',
+      'examcraft_auth_user',
+      'examidea_current_session',
+      'examidea_user_role',
+      'examidea_user_email',
+      'examidea_admin_session',
+      'examidea_admin_authed'
+    ];
+
+    try {
+      sessionKeys.forEach(key => localStorage.removeItem(key));
+      sessionStorage.clear();
     } catch {}
   };
 
@@ -608,8 +686,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subject,
       paperCode: paperCode || 'CBSE-PAPER',
       timestamp: now.toISOString(),
-      userEmail: currentUser?.email || 'guest@anonymous.user',
-      userName: currentUser?.name || 'Guest Student',
+      userEmail: currentUser?.email || getOrCreateGuestEmail(),
+      userName: currentUser?.name || getOrCreateGuestId(),
       userRole: currentUser?.role || 'student'
     };
 
@@ -639,10 +717,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }).catch(() => {});
     } else {
       setGuestDownloadsCount(prev => prev + 1);
+      const persistentGuestId = getOrCreateGuestId();
+      const persistentGuestEmail = getOrCreateGuestEmail();
       const guestUser: User = {
-        id: 'usr-guest-student',
-        name: 'Guest Student (Guest)',
-        email: 'guest@examcraft.internal',
+        id: `usr-${persistentGuestId.toLowerCase()}`,
+        name: persistentGuestId,
+        email: persistentGuestEmail,
         role: 'student',
         photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces',
         dailyQuotaLimit: 1,
@@ -889,6 +969,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearDownloadLogs = () => {
     setDownloadLogs([]);
+    try {
+      localStorage.removeItem('examidea_download_logs');
+    } catch {}
+    fetch('/api/download-logs', {
+      method: 'DELETE'
+    }).catch(() => {});
   };
 
   return (

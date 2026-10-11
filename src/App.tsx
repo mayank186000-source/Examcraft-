@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/Navbar';
 import { GeneratorTab } from './components/GeneratorTab';
 import { SyllabusBlueprintTab } from './components/SyllabusBlueprintTab';
@@ -16,8 +17,11 @@ import { AdminPanelModal } from './components/AdminPanelModal';
 import { QuestionVaultModal } from './components/QuestionVaultModal';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { SharePaperModal } from './components/SharePaperModal';
+import { FeedbackWidgetModal } from './components/FeedbackWidgetModal';
 import { FloatingPen } from './components/FloatingPen';
+import { MessageSquarePlus } from 'lucide-react';
 import { ThreeBackground } from './components/ThreeBackground';
+import { BookIntro } from './components/BookIntro';
 import { useAmbientTimeLighting } from './hooks/useAmbientTimeLighting';
 import { useAuth } from './context/AuthContext';
 
@@ -34,16 +38,44 @@ import { CBSE_SUBJECTS } from './data/cbseData';
 
 // Helper to determine class level from a subjectId
 const getClassFromSubjectId = (subId?: string): string => {
-  if (!subId) return 'Unknown Class';
+  if (!subId) return 'Class 10';
   const s = subId.toLowerCase();
-  if (s.includes('-12') || s.includes('physics') || s.includes('chemistry') || s.includes('biology') || s.includes('accountancy') || s.includes('business') || s.includes('economics') || s.includes('computer-science')) {
+  
+  if (s.includes('class12') || s.endsWith('-12') || s.includes('physics') || s.includes('chemistry') || s.includes('biology') || s.includes('accountancy') || s.includes('business') || s.includes('economics') || s.includes('computer-science')) {
     return 'Class 12';
   }
-  if (s.includes('-11')) {
+  if (s.includes('class11') || s.endsWith('-11')) {
     return 'Class 11';
   }
-  if (s.includes('-9')) {
+  if (s.includes('class10') || s.includes('c10') || s.includes('science-086') || s.includes('maths-041') || s.includes('social-087') || s.includes('english-184') || s.includes('it-402') || s.includes('hindi-002') || s.includes('hindi-085')) {
+    return 'Class 10';
+  }
+  if (s.includes('class9') || s.includes('-9') || s.includes('c9')) {
     return 'Class 9';
+  }
+  if (s.includes('class8') || s.includes('c8')) {
+    return 'Class 8';
+  }
+  if (s.includes('class7') || s.includes('c7')) {
+    return 'Class 7';
+  }
+  if (s.includes('class6') || s.includes('c6')) {
+    return 'Class 6';
+  }
+  if (s.includes('class5') || s.includes('c5')) {
+    return 'Class 5';
+  }
+  if (s.includes('class4') || s.includes('c4')) {
+    return 'Class 4';
+  }
+  if (s.includes('class3') || s.includes('c3')) {
+    return 'Class 3';
+  }
+  if (s.includes('class2') || s.includes('c2')) {
+    return 'Class 2';
+  }
+  if (s.includes('class1') || s.includes('c1')) {
+    return 'Class 1';
   }
   return 'Class 10';
 };
@@ -102,6 +134,7 @@ const logPaperQuestionsPipeline = (paper: GeneratedPaper, pipelineSource: string
 
 export default function App() {
   const { currentUser } = useAuth();
+  const [showIntro, setShowIntro] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('generator');
   const [isBrandingOpen, setIsBrandingOpen] = useState<boolean>(false);
   const [isPaperCodeModalOpen, setIsPaperCodeModalOpen] = useState<boolean>(false);
@@ -109,6 +142,7 @@ export default function App() {
   const [isGoogleDriveOpen, setIsGoogleDriveOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [paperToShare, setPaperToShare] = useState<GeneratedPaper | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
   // Authentication & Admin Modals State
@@ -194,7 +228,7 @@ export default function App() {
 
   // Custom School Branding State
   const [branding, setBranding] = useState<CustomBranding>({
-    schoolName: 'Delhi Public School, R.K. Puram',
+    schoolName: 'CBSE Test Generator',
     tagline: 'Affiliated to CBSE, New Delhi | School Code: 20194',
     logoUrl: '/logo.png',
     watermark: 'EXAMCRAFT CBSE MODEL PAPER',
@@ -256,6 +290,7 @@ export default function App() {
             body: JSON.stringify({
               subjectName: resolvedSubjectName,
               subjectCode: resolvedSubjectCode,
+              classLevel: getClassFromSubjectId(config.subjectId),
               selectedChapters: selectedChTitles,
               totalMarks: config.totalMarks,
               timeMinutes: config.durationMinutes,
@@ -264,7 +299,9 @@ export default function App() {
               schoolName: config.schoolName,
               examName: config.title,
               customKeys: { gemini: geminiKey, openai: openaiKey, grok: grokKey },
-              preferredProvider
+              preferredProvider,
+              customBlueprint: config.customBlueprint,
+              juniorCustomPrompt: config.juniorCustomPrompt
             })
           });
 
@@ -418,29 +455,43 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50/60 dark:bg-slate-950/70 text-slate-900 dark:text-slate-100 font-sans flex flex-col selection:bg-blue-600 selection:text-white print:bg-white transition-colors duration-500 bg-ambient-mesh relative w-full max-w-full overflow-x-auto"
+      data-book-reveal="background"
+      className="min-h-screen bg-slate-50/60 dark:bg-slate-950/70 text-slate-900 dark:text-slate-100 font-sans flex flex-col selection:bg-blue-600 selection:text-white print:bg-white transition-colors duration-500 bg-ambient-mesh relative w-full max-w-full overflow-x-hidden"
       style={ambientLighting.meshStyle}
     >
-      {/* 3D Animated Canvas Background (Particles Wave + Floating Geometric Shapes + NCERT Diagrams) */}
+      {/* Cinematic 3D Hardcover Book Intro Overlay */}
+      {showIntro && (
+        <BookIntro
+          onComplete={() => setShowIntro(false)}
+          brandTitle="EXAMCRAFT CBSE"
+          brandSub="TEST GENERATOR 2026"
+        />
+      )}
+
+      {/* 3D Animated Canvas Background (Particles Wave + Floating Geometric Shapes + NCERT Diagrams) - Automatically disabled in Grammar & Interactive Quiz tests for clear focus */}
       <ThreeBackground
-        enabled={is3DEnabled}
+        enabled={is3DEnabled && activeTab !== 'grammar' && activeTab !== 'quiz'}
         classLevel={currentBgClass}
         subjectId={currentBgSubjectId}
         isNight={ambientLighting.isNight}
       />
 
-      {/* Time-Adaptive Decorative Ambient Lighting Auras */}
-      <div
-        className={`pointer-events-none fixed top-0 left-1/4 -translate-x-1/2 rounded-full blur-3xl -z-10 animate-pulse transition-all duration-1000 ${ambientLighting.auraTopClass}`}
-        style={{ animationDuration: '8s' }}
-      />
-      <div
-        className={`pointer-events-none fixed top-1/3 right-10 rounded-full blur-3xl -z-10 animate-pulse transition-all duration-1000 ${ambientLighting.auraRightClass}`}
-        style={{ animationDuration: '10s' }}
-      />
-      <div
-        className={`pointer-events-none fixed bottom-10 left-10 rounded-full blur-3xl -z-10 transition-all duration-1000 ${ambientLighting.auraBottomClass}`}
-      />
+      {/* Time-Adaptive Decorative Ambient Lighting Auras (Hidden during tests for clean contrast) */}
+      {activeTab !== 'grammar' && activeTab !== 'quiz' && (
+        <>
+          <div
+            className={`pointer-events-none fixed top-0 left-1/4 -translate-x-1/2 rounded-full blur-3xl -z-10 animate-pulse transition-all duration-1000 ${ambientLighting.auraTopClass}`}
+            style={{ animationDuration: '8s' }}
+          />
+          <div
+            className={`pointer-events-none fixed top-1/3 right-10 rounded-full blur-3xl -z-10 animate-pulse transition-all duration-1000 ${ambientLighting.auraRightClass}`}
+            style={{ animationDuration: '10s' }}
+          />
+          <div
+            className={`pointer-events-none fixed bottom-10 left-10 rounded-full blur-3xl -z-10 transition-all duration-1000 ${ambientLighting.auraBottomClass}`}
+          />
+        </>
+      )}
 
       {/* Navigation Bar */}
       <Navbar
@@ -459,64 +510,75 @@ export default function App() {
         onToggle3D={handleToggle3D}
       />
 
-      {/* Main Tab Content */}
-      <main className="flex-1">
-        {activeTab === 'generator' && (
-          <GeneratorTab
-            onGeneratePaper={handleGeneratePaper}
-            isGenerating={isGenerating}
-            branding={branding}
-            onOpenBranding={() => setIsBrandingOpen(true)}
-            onOpenPaperCodeModal={() => setIsPaperCodeModalOpen(true)}
-            onOpenQuestionVault={() => setIsQuestionVaultOpen(true)}
-            onSubjectChange={(cls, subId) => {
-              setCurrentBgClass(cls);
-              setCurrentBgSubjectId(subId);
-            }}
-          />
-        )}
+      {/* Main Tab Content with Smooth Page Transition Animations */}
+      <main className="flex-1 overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.995 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full h-full"
+          >
+            {activeTab === 'generator' && (
+              <GeneratorTab
+                onGeneratePaper={handleGeneratePaper}
+                isGenerating={isGenerating}
+                branding={branding}
+                onOpenBranding={() => setIsBrandingOpen(true)}
+                onOpenPaperCodeModal={() => setIsPaperCodeModalOpen(true)}
+                onOpenQuestionVault={() => setIsQuestionVaultOpen(true)}
+                onSubjectChange={(cls, subId) => {
+                  setCurrentBgClass(cls);
+                  setCurrentBgSubjectId(subId);
+                }}
+              />
+            )}
 
-        {activeTab === 'revision' && (
-          <RevisionSheetsTab />
-        )}
+            {activeTab === 'revision' && (
+              <RevisionSheetsTab />
+            )}
 
-        {activeTab === 'syllabus' && (
-          <SyllabusBlueprintTab />
-        )}
+            {activeTab === 'syllabus' && (
+              <SyllabusBlueprintTab />
+            )}
 
-        {activeTab === 'pyq' && (
-          <PYQRepositoryTab
-            onLoadPaperToPreview={(paper) => {
-              setGeneratedPaper(paper);
-              setIsPreviewOpen(true);
-            }}
-            branding={branding}
-          />
-        )}
+            {activeTab === 'pyq' && (
+              <PYQRepositoryTab
+                onLoadPaperToPreview={(paper) => {
+                  setGeneratedPaper(paper);
+                  setIsPreviewOpen(true);
+                }}
+                branding={branding}
+              />
+            )}
 
-        {(activeTab === 'evaluator' || activeTab === 'copy-checker') && (
-          <AIEvaluatorTab onOpenAuthModal={(msg) => handleOpenAuthModal(msg)} />
-        )}
+            {(activeTab === 'evaluator' || activeTab === 'copy-checker') && (
+              <AIEvaluatorTab onOpenAuthModal={(msg) => handleOpenAuthModal(msg)} />
+            )}
 
-        {activeTab === 'qbank' && (
-          <QuestionBankTab
-            customCart={customCart}
-            setCustomCart={setCustomCart}
-            onBuildCustomPaper={handleBuildCustomFromCart}
-          />
-        )}
+            {activeTab === 'qbank' && (
+              <QuestionBankTab
+                customCart={customCart}
+                setCustomCart={setCustomCart}
+                onBuildCustomPaper={handleBuildCustomFromCart}
+              />
+            )}
 
-        {activeTab === 'grammar' && (
-          <GrammarQuizTab />
-        )}
+            {activeTab === 'grammar' && (
+              <GrammarQuizTab />
+            )}
 
-        {activeTab === 'quiz' && (
-          <InteractiveQuizTab
-            paper={generatedPaper}
-            onSelectPaper={(paper) => setGeneratedPaper(paper)}
-            onExitQuiz={() => setActiveTab('generator')}
-          />
-        )}
+            {activeTab === 'quiz' && (
+              <InteractiveQuizTab
+                paper={generatedPaper}
+                onSelectPaper={(paper) => setGeneratedPaper(paper)}
+                onExitQuiz={() => setActiveTab('generator')}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Paper Preview Modal */}
@@ -606,27 +668,52 @@ export default function App() {
         }}
       />
 
-      {/* Floating Pen Overlay */}
-      <FloatingPen />
+      {/* Floating Feedback & Suggestions Trigger Button */}
+      <button
+        onClick={() => setIsFeedbackOpen(true)}
+        className="fixed bottom-5 left-5 z-40 px-3.5 py-2 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white font-medium text-xs shadow-md transition-colors flex items-center gap-2 cursor-pointer border border-slate-700/50 print:hidden"
+        title="Give Feedback or Suggest Improvement Idea"
+      >
+        <MessageSquarePlus className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Feedback</span>
+      </button>
+
+      {/* Feedback Widget Modal */}
+      <FeedbackWidgetModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+      />
 
       {/* Footer */}
-      <footer className="bg-stone-900 text-stone-400 text-xs py-8 border-t border-stone-800 mt-12 print:hidden">
+      <footer className="bg-slate-950 text-slate-400 text-xs py-8 border-t border-slate-900 mt-12 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <img 
               src={branding?.logoUrl || "/logo.png"} 
               alt="ExamCraft CBSE Logo" 
-              className="w-8 h-8 object-cover rounded-md filter drop-shadow-[0_2px_6px_rgba(16,185,129,0.3)] border border-stone-700/50"
+              className="w-7 h-7 object-contain rounded-md border border-slate-800 bg-slate-900 p-0.5"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/logo.png';
               }}
               referrerPolicy="no-referrer"
             />
-            <span className="font-bold text-stone-200 text-sm">ExamCraft CBSE Test Generator</span>
+            <span className="font-semibold text-slate-200 text-sm">ExamCraft CBSE Paper Engine</span>
           </div>
-          <p className="text-center sm:text-right">
-            Designed for CBSE Class 9, 10 & 12 Students, Teachers, and Coaching Institutes • Aligned with Latest 2025-2026 Sample Papers & Competency Blueprints
-          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <p className="text-center sm:text-right text-slate-500 text-[11px]">
+              CBSE Class 9, 10, 11 & 12 • Aligned with 2025–2026 Sample Papers & Competency Blueprints
+            </p>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('examcraft_book_intro_seen');
+                setShowIntro(true);
+              }}
+              className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition-colors text-[11px] font-medium flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+              title="Replay 3D Book Animation Intro"
+            >
+              <span>Replay 3D Intro</span>
+            </button>
+          </div>
         </div>
       </footer>
     </div>

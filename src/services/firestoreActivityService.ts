@@ -8,10 +8,12 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  limit 
+  limit,
+  runTransaction 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { User } from '../types';
+import { getOrCreateGuestId, getOrCreateGuestEmail, formatGuestName } from '../utils/guestTracker';
 import { 
   debugLogPaperGenerationPayload, 
   debugLogQuizSubmissionPayload 
@@ -181,10 +183,13 @@ export function getLocalStudentActivities(): StudentActivityDoc[] {
   });
 }
 
-export function mergeActivities(remote: StudentActivityDoc[], local: StudentActivityDoc[]): StudentActivityDoc[] {
+export function mergeActivities(remote: StudentActivityDoc[] = [], local: StudentActivityDoc[] = []): StudentActivityDoc[] {
   const map = new Map<string, StudentActivityDoc>();
+  const safeRemote = Array.isArray(remote) ? remote : [];
+  const safeLocal = Array.isArray(local) ? local : [];
 
   const getDedupKey = (act: StudentActivityDoc) => {
+    if (!act) return 'invalid_key';
     const email = (act.studentEmail || act.studentId || '').toLowerCase().trim();
     const code = act.paperCode || act.paperId || 'code';
     if (act.id && !act.id.includes('undefined') && !act.id.includes('NaN')) {
@@ -193,12 +198,14 @@ export function mergeActivities(remote: StudentActivityDoc[], local: StudentActi
     return `${act.activityType}_${email}_${code}`;
   };
 
-  remote.forEach(r => {
+  safeRemote.forEach(r => {
+    if (!r) return;
     const key = getDedupKey(r);
     map.set(key, r);
   });
 
-  local.forEach(l => {
+  safeLocal.forEach(l => {
+    if (!l) return;
     const key = getDedupKey(l);
     if (!map.has(key)) {
       map.set(key, l);
@@ -227,8 +234,9 @@ export async function logPaperGenerationToFirestore(
   student: { id?: string; name?: string; email?: string },
   paper: { id: string; paperCode?: string; title: string; subjectName?: string; classLevel?: string; totalMarks?: number }
 ): Promise<string | null> {
-  const studentEmail = (student.email || 'guest@examidea.internal').toLowerCase().trim();
-  const studentName = student.name || (studentEmail.includes('guest') ? 'Guest Student' : studentEmail.split('@')[0]);
+  const isGuest = !student.email || student.email.includes('guest') || student.email === 'guest@examidea.internal';
+  const studentEmail = (isGuest ? getOrCreateGuestEmail() : student.email!).toLowerCase().trim();
+  const studentName = isGuest ? getOrCreateGuestId() : formatGuestName(studentEmail, student.name);
   const studentId = student.id || studentEmail;
   const paperCode = paper.paperCode || paper.id;
   const now = new Date().toISOString();
@@ -272,9 +280,9 @@ export async function logPaperGenerationToFirestore(
 }
 
 /**
- * Log a quiz submission event directly to Firestore
+ * Unified atomic transaction utility in Firestore layer linking grammar records to user ID
  */
-export async function logQuizSubmissionToFirestore(
+export async function saveGrammarResultTx(
   student: { id?: string; name?: string; email?: string },
   quiz: { 
     paperId: string; 
@@ -287,12 +295,15 @@ export async function logQuizSubmissionToFirestore(
     percentage: number; 
     timeTakenSeconds: number;
   }
-): Promise<string | null> {
-  const studentEmail = (student.email || 'guest@examidea.internal').toLowerCase().trim();
-  const studentName = student.name || (studentEmail.includes('guest') ? 'Guest Student' : studentEmail.split('@')[0]);
-  const studentId = student.id || studentEmail;
+): Promise<string> {
+  const isGuest = !student.email || student.email.includes('guest') || student.email === 'guest@examidea.internal';
+  const studentEmail = (isGuest ? getOrCreateGuestEmail() : student.email!).toLowerCase().trim();
+  const studentName = isGuest ? getOrCreateGuestId() : formatGuestName(studentEmail, student.name);
+  const userDocId = studentEmail.replace(/[^a-zA-Z0-9]/g, '_');
+  const studentId = student.id || `usr-${userDocId}`;
   const paperCode = quiz.paperCode || quiz.paperId;
   const now = new Date().toISOString();
+  const resultDocId = paperCode.replace(/[^a-zA-Z0-9]/g, '_');
 
   const activityPayload: StudentActivityDoc = {
     studentId,
@@ -311,9 +322,6 @@ export async function logQuizSubmissionToFirestore(
     timestamp: now,
   };
 
-  saveActivityLocally(activityPayload);
-  debugLogQuizSubmissionPayload(student, quiz, activityPayload);
-
   const grammarResultPayload = {
     code: paperCode,
     topic: quiz.paperTitle || quiz.subjectName || 'Practice Test',
@@ -324,19 +332,50 @@ export async function logQuizSubmissionToFirestore(
     date: now,
     userName: studentName,
     userEmail: studentEmail,
+    userId: studentId,
     classLevel: quiz.classLevel || '10'
   };
 
-  syncGrammarResultToFirestore(grammarResultPayload);
+  saveActivityLocally(activityPayload);
+  debugLogQuizSubmissionPayload(student, quiz, activityPayload);
 
-  // Write directly to Firestore
   try {
-    if (db && db.app) {
-      await addDoc(collection(db, 'student_activities'), activityPayload);
-      await addDoc(collection(db, 'grammar_results'), grammarResultPayload);
+    const raw = localStorage.getItem('examcraft_grammar_results');
+    const list: any[] = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex(r => r.code === paperCode);
+    if (idx >= 0) list[idx] = grammarResultPayload;
+    else list.unshift(grammarResultPayload);
+    localStorage.setItem('examcraft_grammar_results', JSON.stringify(list));
+  } catch {}
+
+  if (db && db.app) {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const userRef = doc(db, 'users', userDocId);
+        const resultRef = doc(db, 'grammar_results', resultDocId);
+        const activityRef = doc(collection(db, 'student_activities'));
+
+        const userSnap = await transaction.get(userRef);
+        const existingUserData = userSnap.exists() ? userSnap.data() : {};
+
+        transaction.set(userRef, {
+          ...existingUserData,
+          id: studentId,
+          name: studentName,
+          email: studentEmail,
+          role: studentEmail === 'mukesh186000@gmail.com' ? 'admin' : (existingUserData.role || 'student'),
+          lastTestDate: now,
+          totalTestsGiven: ((existingUserData.totalTestsGiven as number) || 0) + 1
+        }, { merge: true });
+
+        transaction.set(resultRef, grammarResultPayload, { merge: true });
+        transaction.set(activityRef, activityPayload);
+      });
+    } catch (e) {
+      console.warn('Transaction failed, attempting fallback writes:', e);
+      await addDoc(collection(db, 'student_activities'), activityPayload).catch(() => {});
+      await setDoc(doc(db, 'grammar_results', resultDocId), grammarResultPayload, { merge: true }).catch(() => {});
     }
-  } catch (e) {
-    console.warn('Firestore write quiz submission warning:', e);
   }
 
   // Backup sync to server
@@ -348,7 +387,27 @@ export async function logQuizSubmissionToFirestore(
     }).catch(() => {});
   } catch {}
 
-  return `quiz-${Date.now()}`;
+  return `tx-${Date.now()}`;
+}
+
+/**
+ * Log a quiz submission event directly to Firestore
+ */
+export async function logQuizSubmissionToFirestore(
+  student: { id?: string; name?: string; email?: string },
+  quiz: { 
+    paperId: string; 
+    paperCode?: string; 
+    paperTitle?: string; 
+    subjectName?: string; 
+    classLevel?: string; 
+    score: number; 
+    totalMarks: number; 
+    percentage: number; 
+    timeTakenSeconds: number;
+  }
+): Promise<string | null> {
+  return saveGrammarResultTx(student, quiz);
 }
 
 /**

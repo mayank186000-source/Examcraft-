@@ -186,6 +186,15 @@ export const AIEvaluatorTab: React.FC<AIEvaluatorTabProps> = ({ onOpenAuthModal 
     setIsCameraActive(false);
   };
 
+  // Clean up camera stream if component unmounts or user navigates away
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
   const captureCameraPhoto = () => {
     if (videoRef.current) {
       const canvas = document.createElement('canvas');
@@ -479,43 +488,43 @@ export const AIEvaluatorTab: React.FC<AIEvaluatorTabProps> = ({ onOpenAuthModal 
   // GUEST / UNAUTHENTICATED VIEW
   if (!currentUser) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-in fade-in duration-300">
-        <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-10 border-2 border-purple-500/50 shadow-2xl space-y-6 relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-2 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-sm">
-              <Lock className="w-4 h-4 text-amber-400" />
-              <span>Student Account Feature • स्टूडेंट लॉगिन अनिवार्य</span>
+            <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 rounded-md text-xs font-semibold">
+              <Lock className="w-3.5 h-3.5 text-slate-500" />
+              <span>Student Account Feature</span>
             </span>
           </div>
 
-          <div className="max-w-3xl space-y-3">
-            <h1 className="text-2xl sm:text-4xl font-black text-white leading-tight">
-              AI Copy Checking & Auto Email Improvement Report
+          <div className="max-w-3xl space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-950 dark:text-white leading-tight">
+              AI Answer Sheet Evaluator & Performance Report
             </h1>
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-medium">
-              इस फ़ीचर के माध्यम से अपनी टेस्ट उत्तर-पुस्तिका (Answer Copy) कैमरा/फोटो से स्कैन करके तुरंत मार्क्स (Marks) व आवश्यक सुधार प्राप्त करें। कॉपी चेकिंग के बाद सम्पूर्ण रिपोर्ट सीधे आपके ईमेल पर भेज दी जाती है।
+            <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
+              Scan or dictate student answer copies to evaluate step-by-step marking, missing keywords, and examiner feedback. A complete assessment report will be automatically dispatched to your student email.
             </p>
           </div>
 
-          <div className="bg-slate-950/90 p-6 rounded-2xl border-2 border-purple-500/50 flex flex-col sm:flex-row items-center justify-between gap-5 backdrop-blur-md shadow-xl">
+          <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-5">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-purple-600/30 border border-purple-400/50 flex items-center justify-center text-purple-300 shrink-0">
-                <UserCheck className="w-6 h-6 text-emerald-400" />
+              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <UserCheck className="w-5 h-5" />
               </div>
-              <div className="space-y-1">
-                <h3 className="font-black text-base text-white">इस फ़ीचर का उपयोग करने के लिए लॉगिन करें</h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  To evaluate answer sheets and send checked copy reports to your registered email address, please log in or create a student account.
+              <div className="space-y-0.5">
+                <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Sign in to evaluate answer sheets</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  To check test copies and track your grading history across sessions, please sign in with your student account.
                 </p>
               </div>
             </div>
 
             <button
-              onClick={() => onOpenAuthModal && onOpenAuthModal('इस AI Copy Checking फ़ीचर का उपयोग करने के लिए लॉगिन करें।')}
-              className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-sm shadow-xl shadow-purple-600/40 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-105 shrink-0"
+              onClick={() => onOpenAuthModal && onOpenAuthModal('Please sign in to access AI answer copy checking.')}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shrink-0"
             >
-              <UserCheck className="w-5 h-5 text-amber-300" />
-              <span>Login / Register Student Account (लॉगिन करें)</span>
+              <UserCheck className="w-4 h-4" />
+              <span>Sign In to Student Account</span>
             </button>
           </div>
         </div>
@@ -525,7 +534,7 @@ export const AIEvaluatorTab: React.FC<AIEvaluatorTabProps> = ({ onOpenAuthModal 
 
   // LOGGED-IN STUDENT VIEW
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Hidden Native Device Camera Input */}
       <input
         ref={nativeCameraInputRef}
@@ -548,34 +557,34 @@ export const AIEvaluatorTab: React.FC<AIEvaluatorTabProps> = ({ onOpenAuthModal 
       />
 
       {/* Student Profile Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-purple-500/30 shadow-xl space-y-4">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-purple-600/30 border border-purple-400/50 flex items-center justify-center text-purple-300 font-black text-lg shadow-inner shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-900 dark:text-white font-bold text-sm shrink-0">
               {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black text-white">{currentUser.name}</h1>
-                <span className="bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full">
+                <h1 className="text-lg font-bold text-slate-900 dark:text-white">{currentUser.name}</h1>
+                <span className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] uppercase font-semibold px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                   Verified Student
                 </span>
               </div>
-              <p className="text-xs text-purple-300 flex items-center gap-1.5 mt-0.5">
-                <Mail className="w-3.5 h-3.5 text-purple-400" />
-                <span>Registered Email: <strong className="text-white font-mono">{currentUser.email}</strong></span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                <Mail className="w-3.5 h-3.5" />
+                <span>Registered Email: <strong className="text-slate-800 dark:text-slate-200 font-mono font-medium">{currentUser.email}</strong></span>
               </p>
             </div>
           </div>
 
           {/* Sub-Tab Navigation Toggle */}
-          <div className="flex items-center bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
             <button
               onClick={() => setActiveSubTab('evaluate')}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
                 activeSubTab === 'evaluate'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <BrainCircuit className="w-4 h-4" />
@@ -584,10 +593,10 @@ export const AIEvaluatorTab: React.FC<AIEvaluatorTabProps> = ({ onOpenAuthModal 
 
             <button
               onClick={() => setActiveSubTab('history')}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
                 activeSubTab === 'history'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <History className="w-4 h-4" />
@@ -637,7 +646,7 @@ export const AIEvaluatorTab: React.FC<AIEvaluatorTabProps> = ({ onOpenAuthModal 
       {activeSubTab === 'evaluate' && (
         <div className="space-y-8">
           {/* Main Evaluation Form Card */}
-          <div className="bg-slate-900/90 rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6 shadow-xl">
+          <div className="edtech-card eval-card rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6 shadow-xl">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
               <div>
                 <h2 className="text-lg font-black text-white flex items-center gap-2">

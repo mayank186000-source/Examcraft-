@@ -122,104 +122,213 @@ function drawHeader(
 // ==========================================
 export function createHumanEyeDiagram(isDark = true): HTMLCanvasElement {
   const { canvas, ctx } = initCardCanvas(600, 450, isDark);
-  drawHeader(ctx, 'NCERT Human Eye Anatomy & Ray Focus', 'CLASS 10 • CH 11', 600, isDark);
+  drawHeader(ctx, 'NCERT 4D Quantum Eye Optics & Ray Focus', 'CLASS 10 • CH 11', 600, isDark);
 
   ctx.save();
-  const cx = 330;
-  const cy = 250;
-  const r = 120;
+  const cx = 310;
+  const cy = 245;
+  const r = 130;
 
-  // Eyeball outline
-  ctx.strokeStyle = isDark ? '#38bdf8' : '#0284c7';
-  ctx.lineWidth = 3;
+  // Background 4D Radial Holographic Aura
+  const auraGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, r + 45);
+  auraGrad.addColorStop(0, isDark ? 'rgba(34, 211, 238, 0.25)' : 'rgba(37, 99, 235, 0.18)');
+  auraGrad.addColorStop(0.5, isDark ? 'rgba(168, 85, 247, 0.15)' : 'rgba(147, 51, 234, 0.10)');
+  auraGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = auraGrad;
   ctx.beginPath();
-  ctx.arc(cx, cy, r, -Math.PI * 0.75, Math.PI * 0.75);
-  ctx.stroke();
-
-  // Cornea bulge
-  ctx.beginPath();
-  ctx.arc(cx - r + 30, cy, 55, Math.PI * 0.6, -Math.PI * 0.6, true);
-  ctx.strokeStyle = isDark ? '#34d399' : '#059669';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  // Convex Lens
-  ctx.fillStyle = isDark ? 'rgba(56, 189, 248, 0.2)' : 'rgba(2, 132, 199, 0.15)';
-  ctx.strokeStyle = isDark ? '#38bdf8' : '#0284c7';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.ellipse(cx - 50, cy, 18, 52, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // Ciliary muscles
-  ctx.fillStyle = isDark ? '#f59e0b' : '#d97706';
-  roundRect(ctx, cx - 62, cy - 80, 24, 25, 6);
-  ctx.fill();
-  roundRect(ctx, cx - 62, cy + 55, 24, 25, 6);
+  ctx.arc(cx, cy, r + 45, 0, Math.PI * 2);
   ctx.fill();
 
-  // Retina surface (glowing inner arc)
-  ctx.strokeStyle = isDark ? '#fb7185' : '#e11d48';
-  ctx.lineWidth = 4;
+  // Outer Orbital Cyber Ring
+  ctx.strokeStyle = isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(37, 99, 235, 0.2)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 8]);
   ctx.beginPath();
-  ctx.arc(cx, cy, r - 6, -Math.PI * 0.35, Math.PI * 0.35);
-  ctx.stroke();
-
-  // Optic nerve tunnel
-  ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(241, 245, 249, 0.95)';
-  ctx.beginPath();
-  ctx.moveTo(cx + r - 15, cy - 15);
-  ctx.lineTo(cx + r + 35, cy - 22);
-  ctx.lineTo(cx + r + 35, cy + 22);
-  ctx.lineTo(cx + r - 15, cy + 15);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Optical axis & Light rays converging on retina
-  ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.4)' : 'rgba(100, 116, 139, 0.4)';
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.moveTo(50, cy);
-  ctx.lineTo(cx + r, cy);
+  ctx.arc(cx, cy, r + 25, 0, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Incident parallel light rays
-  ctx.strokeStyle = '#eab308'; // Golden ray
-  ctx.lineWidth = 2;
-  const focalPointX = cx + r - 10;
+  // Main Sclera Spherical Globe (Clean, Smooth Circle)
+  ctx.strokeStyle = isDark ? '#38bdf8' : '#0284c7';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI * 0.82, Math.PI * 0.82);
+  ctx.stroke();
+
+  // Anterior Cornea Convex Arc
+  ctx.beginPath();
+  ctx.arc(cx - r + 32, cy, 60, Math.PI * 0.60, -Math.PI * 0.60, true);
+  ctx.strokeStyle = isDark ? '#00ffcc' : '#059669';
+  ctx.lineWidth = 4.5;
+  ctx.stroke();
+
+  // Iris Aperture Plates
+  ctx.strokeStyle = isDark ? '#f59e0b' : '#d97706';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(cx - 68, cy - 65);
+  ctx.lineTo(cx - 52, cy - 38);
+  ctx.moveTo(cx - 68, cy + 65);
+  ctx.lineTo(cx - 52, cy + 38);
+  ctx.stroke();
+
+  // Biconvex Crystalline Lens (Luminous Crystal Core)
+  const lensGrad = ctx.createLinearGradient(cx - 65, cy, cx - 35, cy);
+  lensGrad.addColorStop(0, isDark ? 'rgba(34, 211, 238, 0.5)' : 'rgba(2, 132, 199, 0.35)');
+  lensGrad.addColorStop(1, isDark ? 'rgba(168, 85, 247, 0.5)' : 'rgba(147, 51, 234, 0.35)');
+  ctx.fillStyle = lensGrad;
+  ctx.strokeStyle = isDark ? '#22d3ee' : '#0284c7';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.ellipse(cx - 50, cy, 20, 58, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Ciliary Muscle Supports
+  ctx.fillStyle = isDark ? '#fbbf24' : '#d97706';
+  roundRect(ctx, cx - 62, cy - 88, 24, 24, 6);
+  ctx.fill();
+  roundRect(ctx, cx - 62, cy + 64, 24, 24, 6);
+  ctx.fill();
+
+  // Retina Layer (Glowing Pink Arc on Posterior Screen)
+  ctx.strokeStyle = isDark ? '#f43f5e' : '#e11d48';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 6, -Math.PI * 0.4, Math.PI * 0.4);
+  ctx.stroke();
+
+  // Sleek Optic Nerve Signal Bundle (Clean Cable Conduit down-right)
+  ctx.strokeStyle = isDark ? '#818cf8' : '#4f46e5';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx + r - 10, cy + 12);
+  ctx.quadraticCurveTo(cx + r + 30, cy + 25, cx + r + 55, cy + 60);
+  ctx.stroke();
+
+  // Signal Node Pulse
+  ctx.fillStyle = '#818cf8';
+  ctx.beginPath();
+  ctx.arc(cx + r + 55, cy + 60, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Optical Axis Line
+  ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.5)' : 'rgba(100, 116, 139, 0.5)';
+  ctx.setLineDash([5, 5]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(40, cy);
+  ctx.lineTo(cx + r + 15, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Incident Golden Laser Light Rays
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 2.8;
+  const focalPointX = cx + r - 8;
   const focalPointY = cy;
 
   // Ray 1 (Top)
   ctx.beginPath();
-  ctx.moveTo(60, cy - 40);
-  ctx.lineTo(cx - 50, cy - 35);
+  ctx.moveTo(45, cy - 44);
+  ctx.lineTo(cx - 50, cy - 36);
   ctx.lineTo(focalPointX, focalPointY);
   ctx.stroke();
 
   // Ray 2 (Bottom)
   ctx.beginPath();
-  ctx.moveTo(60, cy + 40);
-  ctx.lineTo(cx - 50, cy + 35);
+  ctx.moveTo(45, cy + 44);
+  ctx.lineTo(cx - 50, cy + 36);
   ctx.lineTo(focalPointX, focalPointY);
   ctx.stroke();
 
-  // Focal point dot on retina
+  // Focal Point Focal Dot (Glowing Laser Point)
   ctx.fillStyle = '#ef4444';
+  ctx.shadowColor = '#facc15';
+  ctx.shadowBlur = 14;
   ctx.beginPath();
-  ctx.arc(focalPointX, focalPointY, 5, 0, Math.PI * 2);
+  ctx.arc(focalPointX, focalPointY, 6.5, 0, Math.PI * 2);
   ctx.fill();
+  ctx.shadowBlur = 0;
 
-  // Annotations & Labels
-  ctx.font = 'bold 12px system-ui, sans-serif';
-  ctx.fillStyle = isDark ? '#94a3b8' : '#334155';
-  ctx.fillText('Cornea', cx - 120, cy - 70);
-  ctx.fillText('Crystalline Lens', cx - 40, cy - 90);
-  ctx.fillText('Retina (Screen)', cx + 45, cy - 105);
-  ctx.fillText('Optic Nerve', cx + 75, cy + 35);
-  ctx.fillText('Sharp Image Formation (f)', focalPointX - 140, cy + 35);
+  // Annotations & Labels with clean NCERT indicator lines
+  ctx.font = 'bold 13px system-ui, sans-serif';
+
+  // 1. Cornea
+  ctx.fillStyle = '#00ffcc';
+  ctx.fillText('Cornea', cx - 155, cy - 75);
+  ctx.strokeStyle = '#00ffcc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 110, cy - 70);
+  ctx.lineTo(cx - 96, cy - 40);
+  ctx.stroke();
+
+  // 2. Iris
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillText('Iris', cx - 110, cy - 115);
+  ctx.strokeStyle = '#f59e0b';
+  ctx.beginPath();
+  ctx.moveTo(cx - 95, cy - 110);
+  ctx.lineTo(cx - 62, cy - 50);
+  ctx.stroke();
+
+  // 3. Pupil
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillText('Pupil', cx - 130, cy + 85);
+  ctx.strokeStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.moveTo(cx - 95, cy + 80);
+  ctx.lineTo(cx - 60, cy + 18);
+  ctx.stroke();
+
+  // 4. Crystalline Lens
+  ctx.fillStyle = '#22d3ee';
+  ctx.fillText('Crystalline Lens', cx - 35, cy - 118);
+  ctx.strokeStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.moveTo(cx - 15, cy - 112);
+  ctx.lineTo(cx - 50, cy - 55);
+  ctx.stroke();
+
+  // 5. Ciliary Muscles
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillText('Ciliary Muscles', cx - 120, cy - 142);
+  ctx.strokeStyle = '#fbbf24';
+  ctx.beginPath();
+  ctx.moveTo(cx - 40, cy - 138);
+  ctx.lineTo(cx - 50, cy - 80);
+  ctx.stroke();
+
+  // 6. Aqueous Humour
+  ctx.fillStyle = isDark ? '#38bdf8' : '#0284c7';
+  ctx.fillText('Aqueous Humour', cx - 175, cy + 15);
+
+  // 7. Vitreous Humour
+  ctx.fillStyle = isDark ? '#a855f7' : '#7c3aed';
+  ctx.fillText('Vitreous Humour', cx + 10, cy - 40);
+
+  // 8. Retina (Screen)
+  ctx.fillStyle = '#f43f5e';
+  ctx.fillText('Retina (Screen)', cx + 55, cy - 105);
+  ctx.strokeStyle = '#f43f5e';
+  ctx.beginPath();
+  ctx.moveTo(cx + 65, cy - 98);
+  ctx.lineTo(cx + 100, cy - 65);
+  ctx.stroke();
+
+  // 9. Optic Nerve
+  ctx.fillStyle = isDark ? '#c084fc' : '#7c3aed';
+  ctx.fillText('Optic Nerve', cx + 75, cy + 85);
+  ctx.strokeStyle = isDark ? '#c084fc' : '#7c3aed';
+  ctx.beginPath();
+  ctx.moveTo(cx + 80, cy + 78);
+  ctx.lineTo(cx + 130, cy + 42);
+  ctx.stroke();
+
+  // Real Image Focus
+  ctx.fillStyle = '#facc15';
+  ctx.fillText('Real Image Focus (f)', focalPointX - 145, cy + 42);
 
   ctx.restore();
   return canvas;
@@ -1366,6 +1475,246 @@ export function createOpenBookAuraDiagram(isDark = true): HTMLCanvasElement {
   ctx.font = 'bold 12px system-ui, sans-serif';
   ctx.fillStyle = '#10b981';
   ctx.fillText('CBSE Literature, Unseen Passages, Grammar & Prose', 130, 395);
+
+  ctx.restore();
+  return canvas;
+}
+
+// 12. DNA Double Helix 4D Molecular Structure Diagram
+export function createDnaDoubleHelixDiagram(isDark = true): HTMLCanvasElement {
+  const { canvas, ctx } = initCardCanvas(600, 450, isDark);
+  drawHeader(ctx, 'NCERT Science & Genetics • DNA Double Helix 4D', 'BIOLOGY / GENETICS', 600, isDark);
+
+  ctx.save();
+  const cx = 300;
+  const startY = 100;
+  const endY = 370;
+  const points = 18;
+  const heightStep = (endY - startY) / points;
+  const amplitude = 90;
+
+  // Draw base pairs & hydrogen bonds first (behind backbones)
+  for (let i = 0; i <= points; i++) {
+    const y = startY + i * heightStep;
+    const angle = (i / points) * Math.PI * 4; // 2 full helix turns
+    const x1 = cx + Math.sin(angle) * amplitude;
+    const x2 = cx - Math.sin(angle) * amplitude;
+    const zDepth = Math.cos(angle); // -1 to 1 for 3D depth effect
+
+    // Alternate base pair colors (A-T: Cyan/Gold, G-C: Emerald/Magenta)
+    const isAT = i % 2 === 0;
+    const color1 = isAT ? '#06b6d4' : '#10b981';
+    const color2 = isAT ? '#f59e0b' : '#ec4899';
+
+    // Base pair connecting line
+    ctx.beginPath();
+    ctx.moveTo(x1, y);
+    ctx.lineTo(x2, y);
+    ctx.lineWidth = 2 + (zDepth + 1) * 1.2; // 3D line width depth
+    ctx.strokeStyle = isDark ? `rgba(226, 232, 240, ${0.4 + zDepth * 0.25})` : `rgba(71, 85, 105, ${0.4 + zDepth * 0.25})`;
+    ctx.stroke();
+
+    // Color-coded base pair halves
+    const midX = (x1 + x2) / 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y);
+    ctx.lineTo(midX, y);
+    ctx.strokeStyle = color1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(midX, y);
+    ctx.lineTo(x2, y);
+    ctx.strokeStyle = color2;
+    ctx.stroke();
+
+    // Hydrogen bond dots in center
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(midX - 3, y, 1.5, 0, Math.PI * 2);
+    ctx.arc(midX + 3, y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw Helix Strand A (Cyan/Blue)
+  ctx.beginPath();
+  for (let i = 0; i <= points * 4; i++) {
+    const t = i / (points * 4);
+    const y = startY + t * (endY - startY);
+    const angle = t * Math.PI * 4;
+    const x = cx + Math.sin(angle) * amplitude;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#38bdf8';
+  ctx.shadowColor = '#0284c7';
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+
+  // Draw Helix Strand B (Purple/Rose)
+  ctx.beginPath();
+  for (let i = 0; i <= points * 4; i++) {
+    const t = i / (points * 4);
+    const y = startY + t * (endY - startY);
+    const angle = t * Math.PI * 4;
+    const x = cx - Math.sin(angle) * amplitude;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#c084fc';
+  ctx.shadowColor = '#9333ea';
+  ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Draw Sugar-Phosphate Nodes along strands
+  for (let i = 0; i <= points; i++) {
+    const y = startY + i * heightStep;
+    const angle = (i / points) * Math.PI * 4;
+    const x1 = cx + Math.sin(angle) * amplitude;
+    const x2 = cx - Math.sin(angle) * amplitude;
+
+    ctx.fillStyle = '#0284c7';
+    ctx.beginPath();
+    ctx.arc(x1, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath();
+    ctx.arc(x2, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Annotations & Labels
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.fillStyle = isDark ? '#38bdf8' : '#0284c7';
+  ctx.fillText('5\' Sugar-Phosphate Backbone', 40, 130);
+  ctx.fillText('3\' Complementary Strand', 415, 130);
+
+  ctx.fillStyle = '#10b981';
+  ctx.fillText('Adenine (A) = Thymine (T)', 40, 395);
+  ctx.fillStyle = '#ec4899';
+  ctx.fillText('Guanine (G) ≡ Cytosine (C)', 400, 395);
+
+  ctx.fillStyle = '#f59e0b';
+  ctx.font = '10px monospace';
+  ctx.fillText('Helical Pitch: 3.4nm | Base Distance: 0.34nm', 185, 420);
+
+  ctx.restore();
+  return canvas;
+}
+
+// 13. Artificial Intelligence & Deep Neural Network 4D Diagram
+export function createAiNeuralNetworkDiagram(isDark = true): HTMLCanvasElement {
+  const { canvas, ctx } = initCardCanvas(600, 450, isDark);
+  drawHeader(ctx, 'CBSE Science & AI • Neural Network & Artificial Intelligence', 'AI & COMPUTATIONAL SCIENCE', 600, isDark);
+
+  ctx.save();
+  // Layers configuration: Input (4 nodes), Hidden 1 (5 nodes), Hidden 2 (5 nodes), Output (3 nodes)
+  const layerX = [100, 230, 370, 500];
+  const layerNodes = [4, 6, 6, 3];
+  const nodeCoords: { x: number; y: number; layer: number }[][] = [];
+
+  // Calculate node positions
+  layerX.forEach((lx, lIdx) => {
+    const count = layerNodes[lIdx];
+    const spacing = 280 / (count + 1);
+    const startY = 90;
+    const currentLayer: { x: number; y: number; layer: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      currentLayer.push({ x: lx, y: startY + (i + 1) * spacing, layer: lIdx });
+    }
+    nodeCoords.push(currentLayer);
+  });
+
+  // Draw synaptic weights / connection lines with glow
+  ctx.lineWidth = 1;
+  for (let l = 0; l < nodeCoords.length - 1; l++) {
+    const currentL = nodeCoords[l];
+    const nextL = nodeCoords[l + 1];
+
+    currentL.forEach((nodeA, idxA) => {
+      nextL.forEach((nodeB, idxB) => {
+        const isHighlight = (idxA + idxB + l) % 3 === 0;
+        ctx.beginPath();
+        ctx.moveTo(nodeA.x, nodeA.y);
+        ctx.lineTo(nodeB.x, nodeB.y);
+
+        if (isHighlight) {
+          ctx.strokeStyle = isDark ? 'rgba(56, 189, 248, 0.65)' : 'rgba(37, 99, 235, 0.55)';
+          ctx.lineWidth = 1.6;
+        } else {
+          ctx.strokeStyle = isDark ? 'rgba(168, 85, 247, 0.25)' : 'rgba(124, 58, 237, 0.2)';
+          ctx.lineWidth = 1.0;
+        }
+        ctx.stroke();
+      });
+    });
+  }
+
+  // Draw glowing data pulse signals on active connections
+  for (let p = 0; p < 12; p++) {
+    const l = p % 3;
+    const nA = nodeCoords[l][p % nodeCoords[l].length];
+    const nB = nodeCoords[l + 1][(p * 2) % nodeCoords[l + 1].length];
+    const progress = 0.2 + (p * 0.15) % 0.7;
+    const px = nA.x + (nB.x - nA.x) * progress;
+    const py = nA.y + (nB.y - nA.y) * progress;
+
+    ctx.fillStyle = p % 2 === 0 ? '#22d3ee' : '#a855f7';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // Draw Neurons / Nodes
+  nodeCoords.forEach((layer, lIdx) => {
+    layer.forEach((node, nIdx) => {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 9, 0, Math.PI * 2);
+
+      let nodeColor = '#38bdf8';
+      if (lIdx === 0) nodeColor = '#06b6d4'; // Input: Cyan
+      else if (lIdx === 1 || lIdx === 2) nodeColor = '#a855f7'; // Hidden: Violet
+      else nodeColor = '#10b981'; // Output: Emerald
+
+      ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+      ctx.fill();
+
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = nodeColor;
+      ctx.shadowColor = nodeColor;
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+
+      // Center core node dot
+      ctx.fillStyle = nodeColor;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
+  ctx.shadowBlur = 0;
+
+  // Layer Labels
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.fillStyle = '#06b6d4';
+  ctx.fillText('Input Features', 70, 400);
+
+  ctx.fillStyle = '#a855f7';
+  ctx.fillText('Deep Learning Hidden Layers', 220, 400);
+
+  ctx.fillStyle = '#10b981';
+  ctx.fillText('AI Predictions', 470, 400);
+
+  ctx.font = '10px monospace';
+  ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
+  ctx.fillText('Activation: ReLU / Sigmoid | Synaptic Weights Optimized via Backpropagation', 80, 422);
 
   ctx.restore();
   return canvas;

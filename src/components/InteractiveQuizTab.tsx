@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { GeneratedPaper, Question } from '../types';
-import confetti from 'canvas-confetti';
 import { PlayCircle, Clock, CheckCircle, Flag, ArrowRight, ArrowLeft, Trophy, RotateCcw, Award, FileText, Sparkles, BookOpen, Layers, CheckSquare } from 'lucide-react';
 import { generateLocalPaper } from '../utils/paperGenerator';
 import { getAllSavedPapers, savePaperToRegistry } from '../utils/paperRegistry';
-import { sanitizeAndDeduplicatePaper } from '../utils/questionVault';
+import { sanitizeAndDeduplicatePaper, sanitizeQuestionOptions, sanitizeQuestion } from '../utils/questionVault';
 import { getSubjectsByClass, CBSE_SUBJECTS } from '../data/cbseData';
 import { useAuth } from '../context/AuthContext';
 import { saveGrammarResult } from '../data/grammarQuestions';
@@ -152,7 +151,7 @@ export const InteractiveQuizTab: React.FC<InteractiveQuizTabProps> = ({
             {availableSubjects.map((sub) => (
               <div
                 key={sub.id}
-                className="bg-white rounded-2xl p-6 border-2 border-stone-200 hover:border-emerald-600 hover:shadow-xl transition-all flex flex-col justify-between group space-y-4"
+                className="edtech-card quiz-card rounded-2xl p-6 border-2 border-stone-200 hover:border-emerald-600 hover:shadow-xl transition-all flex flex-col justify-between group space-y-4"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -197,7 +196,7 @@ export const InteractiveQuizTab: React.FC<InteractiveQuizTabProps> = ({
               {savedPapers.slice(0, 6).map((saved, idx) => (
                 <div
                   key={`quiz-saved-${saved.id}-${idx}`}
-                  className="bg-white rounded-2xl p-5 border border-stone-200 hover:border-amber-500 hover:shadow-lg transition-all space-y-3 flex flex-col justify-between"
+                  className="edtech-card quiz-card rounded-2xl p-5 border border-stone-200 hover:border-amber-500 hover:shadow-lg transition-all space-y-3 flex flex-col justify-between"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
@@ -361,17 +360,6 @@ export const InteractiveQuizTab: React.FC<InteractiveQuizTabProps> = ({
         timeTakenSeconds: elapsedSecs
       }
     ).catch(err => console.warn('Firestore quiz logging error:', err));
-
-    // Fire celebratory confetti!
-    try {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-    } catch (e) {
-      console.log('Confetti triggered');
-    }
   };
 
   const formatTime = (secs: number) => {
@@ -395,25 +383,25 @@ export const InteractiveQuizTab: React.FC<InteractiveQuizTabProps> = ({
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
       {/* Top Header */}
-      <div className="bg-stone-900 text-white rounded-2xl p-4 sm:p-6 border border-stone-800 shadow-xl flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
         <div>
-          <span className="bg-emerald-800/80 text-emerald-200 border border-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded">
+          <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
             Interactive Student Test Mode
           </span>
-          <h2 className="font-extrabold text-lg text-white mt-1">{paper.config?.title || `${paper.subjectName} Practice Test`}</h2>
+          <h2 className="font-bold text-base sm:text-lg text-slate-950 dark:text-white mt-1">{paper.config?.title || `${paper.subjectName} Practice Test`}</h2>
         </div>
 
         {/* Live Timer */}
         {!isSubmitted && (
-          <div className="flex items-center gap-2 bg-stone-800 px-4 py-2 rounded-xl border border-stone-700">
-            <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
-            <span className="font-mono font-black text-amber-400 text-base">{formatTime(timeLeft)}</span>
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800">
+            <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-mono font-bold text-slate-900 dark:text-white text-sm">{formatTime(timeLeft)}</span>
           </div>
         )}
 
         <button
           onClick={onExitQuiz}
-          className="bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-bold px-3.5 py-2 rounded-xl"
+          className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
         >
           Exit Test
         </button>
@@ -446,7 +434,7 @@ export const InteractiveQuizTab: React.FC<InteractiveQuizTabProps> = ({
             </div>
 
             {/* Case passage if available */}
-            {currentQ.casePassage && (
+            {currentQ.casePassage && currentQ.casePassage.trim().length > 5 && !['n/a', 'na', 'none', '-'].includes(currentQ.casePassage.trim().toLowerCase()) && (
               <div className="case-study-container bg-amber-50/95 p-5 rounded-2xl border-2 border-amber-300/80 mb-4 shadow-sm">
                 <p className="font-black not-italic text-amber-950 uppercase tracking-wider text-xs mb-2 border-b border-amber-200/80 pb-1 flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-amber-700" />
@@ -458,44 +446,54 @@ export const InteractiveQuizTab: React.FC<InteractiveQuizTabProps> = ({
               </div>
             )}
 
-            {/* Question Text */}
-            <p className="font-bold text-stone-900 text-base whitespace-pre-line leading-relaxed">
-              {currentQ.questionText}
-            </p>
+            {/* Question Text & Options */}
+            {(() => {
+              const activeQ = sanitizeQuestion(currentQ);
+              return (
+                <>
+                  <p className="font-bold text-stone-900 text-base whitespace-pre-line leading-relaxed">
+                    {activeQ.questionText}
+                  </p>
 
-            {/* Options for MCQ */}
-            {currentQ.options && currentQ.options.length > 0 ? (
-              <div className="space-y-3 pt-2">
-                {currentQ.options.map((opt, idx) => {
-                  const isSelected = answers[currentQ.id] === opt;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => handleAnswerSelect(opt)}
-                      className={`w-full text-left p-4 rounded-xl border-2 text-xs font-medium transition-all flex items-center justify-between ${
-                        isSelected
-                          ? 'border-emerald-700 bg-emerald-50/70 text-emerald-950 font-bold shadow-sm'
-                          : 'border-stone-200 hover:border-stone-300 bg-white text-stone-800'
-                      }`}
-                    >
-                      <span>{opt}</span>
-                      {isSelected && <CheckCircle className="w-4 h-4 text-emerald-700" />}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Type Your Answer Below:</label>
-                <textarea
-                  rows={6}
-                  value={answers[currentQ.id] || ''}
-                  onChange={(e) => handleAnswerSelect(e.target.value)}
-                  placeholder="Write your step-by-step solution here..."
-                  className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:ring-2 focus:ring-emerald-700 outline-none"
-                />
-              </div>
-            )}
+                  {/* Options for MCQ */}
+                  {activeQ.options && activeQ.options.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      {activeQ.options.map((opt, idx) => {
+                        const isSelected = answers[currentQ.id] === opt;
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => handleAnswerSelect(opt)}
+                            className={`w-full text-left p-4 rounded-xl border-2 text-xs font-medium transition-all flex items-center justify-between ${
+                              isSelected
+                                ? 'border-emerald-700 bg-emerald-50/70 text-emerald-950 font-bold shadow-sm'
+                                : 'border-stone-200 hover:border-stone-300 bg-white text-stone-800'
+                            }`}
+                          >
+                            <span>{opt}</span>
+                            {isSelected && <CheckCircle className="w-4 h-4 text-emerald-700" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Textarea for descriptive questions */}
+                  {(!activeQ.options || activeQ.options.length === 0) && (
+                    <div>
+                      <label className="block text-xs font-bold text-stone-700 mb-1">Type Your Answer Below:</label>
+                      <textarea
+                        rows={6}
+                        value={answers[currentQ.id] || ''}
+                        onChange={(e) => handleAnswerSelect(e.target.value)}
+                        placeholder="Write your step-by-step solution here..."
+                        className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:ring-2 focus:ring-emerald-700 outline-none"
+                      />
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Next / Prev Navigation */}
             <div className="pt-6 border-t border-stone-200 flex items-center justify-between">

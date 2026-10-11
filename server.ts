@@ -657,6 +657,18 @@ async function startServer() {
     res.json({ success: true, logs: store.downloadLogs });
   });
 
+  // 7b. Download Logs: DELETE (Clear all logs)
+  app.delete("/api/download-logs", (req, res) => {
+    try {
+      const store = loadServerStore();
+      store.downloadLogs = [];
+      saveServerStore(store);
+      res.json({ success: true, message: "Download logs cleared" });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to clear download logs" });
+    }
+  });
+
   // 8. Download Logs: POST
   app.post("/api/download-logs", (req, res) => {
     try {
@@ -1210,59 +1222,245 @@ Return JSON format:
     }
   });
 
+  // AI Endpoint: Extract/Parse Blueprint from Image, PDF or Text
+  app.post("/api/parse-blueprint", async (req, res) => {
+    try {
+      const { textContent, fileDataBase64, mimeType, customKeys, preferredProvider } = req.body;
+
+      let filePart: { inlineData: { data: string; mimeType: string } } | undefined;
+      if (fileDataBase64 && mimeType) {
+        filePart = {
+          inlineData: {
+            data: fileDataBase64,
+            mimeType: mimeType
+          }
+        };
+      }
+
+      const prompt = `Analyze the provided blueprint image, document, or text and extract the exact exam question paper blueprint / pattern structure into JSON format.
+
+Instructions:
+1. Determine the exam title, total marks, and exam time in minutes if mentioned (e.g. 80 marks, 180 minutes).
+2. Extract all Sections (e.g. Section A, Section B, Section C, Section D, Section E).
+3. For each section, extract:
+   - "name": Section name (e.g. "SECTION A")
+   - "description": Brief section description or instruction (e.g. "Multiple Choice Questions")
+   - "questionType": Must be one of: "mcq" | "vsa" | "sa" | "la" | "case"
+   - "questionCount": Number of questions in this section
+   - "marksPerQuestion": Marks awarded per question in this section
+   - "hasChoice": boolean (true if internal choices/OR options are specified)
+
+Provided Text / Notes (if any):
+"""
+${textContent || ''}
+"""
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "title": "Extracted Custom Blueprint",
+  "totalMarks": 80,
+  "timeMinutes": 180,
+  "sections": [
+    {
+      "id": "sec-1",
+      "name": "SECTION A",
+      "description": "Multiple Choice Questions (1 Mark Each)",
+      "questionType": "mcq",
+      "questionCount": 20,
+      "marksPerQuestion": 1,
+      "hasChoice": false
+    }
+  ]
+}`;
+
+      const aiResponseStr = await generateContentMultiProvider({
+        prompt,
+        customKeys,
+        preferredProvider,
+        systemPrompt: "You are an expert Exam Paper Blueprint Analyzer. Output ONLY valid JSON according to the requested schema.",
+        filePart
+      });
+
+      const parsedJson = JSON.parse(aiResponseStr);
+      res.json({
+        success: true,
+        blueprint: parsedJson
+      });
+    } catch (err: any) {
+      console.error("Error parsing blueprint:", err);
+      res.status(500).json({ error: err?.message || "Failed to parse blueprint from file." });
+    }
+  });
+
+  // AI Endpoint: Preview Junior Custom Writing & Grammar Questions
+  app.post("/api/preview-junior-questions", async (req, res) => {
+    try {
+      const { targetClass, subjectName, writingPrompt, grammarPrompt, customKeys, preferredProvider } = req.body;
+
+      const prompt = `You are a Primary & Middle School CBSE Curriculum Specialist.
+The teacher has requested custom Writing and Grammar questions for Class ${targetClass} (${subjectName || 'English'}).
+
+Teacher Instructions:
+- Writing Section Request: ${writingPrompt || 'None'}
+- Grammar Section Request: ${grammarPrompt || 'None'}
+
+Rules:
+1. Generate 2 to 4 age-appropriate questions strictly matching Class ${targetClass} level.
+2. For writing topics (e.g. paragraph, application, story), construct clear, friendly question prompts with word limits or hints suitable for Class ${targetClass}.
+3. For grammar topics (e.g. prepositions, nouns, verbs), generate specific fill-in-the-blanks or identification questions.
+4. Provide answer key/solution for each question.
+
+Return ONLY a valid JSON array of question objects matching this schema:
+[
+  {
+    "id": "jq-1",
+    "questionNumber": 1,
+    "question": "Write a short 5-line paragraph on 'My Best Friend'.",
+    "questionType": "la",
+    "marks": 5,
+    "section": "SECTION B - WRITING SKILLS",
+    "chapter": "Custom Writing",
+    "answer": "Sample answer points...",
+    "markingScheme": "1 mark per correct line with proper punctuation."
+  }
+]`;
+
+      const aiResponseStr = await generateContentMultiProvider({
+        prompt,
+        customKeys,
+        preferredProvider,
+        systemPrompt: "You are a Primary School Teacher Assistant. Output ONLY valid JSON array of question objects."
+      });
+
+      const parsedQuestions = JSON.parse(aiResponseStr);
+      res.json({
+        success: true,
+        questions: Array.isArray(parsedQuestions) ? parsedQuestions : [parsedQuestions]
+      });
+    } catch (err: any) {
+      console.error("Error generating junior questions preview:", err);
+      res.status(500).json({ error: err?.message || "Failed to generate question preview." });
+    }
+  });
+
   // AI Route 1: Generate Full CBSE Question Paper
   app.post("/api/generate-paper", async (req, res) => {
     try {
       const {
         subjectName,
         subjectCode,
+        classLevel,
         selectedChapters,
         totalMarks,
         timeMinutes,
         difficulty,
         competencyPercent,
+        customBlueprint,
+        juniorCustomPrompt,
         customKeys,
         preferredProvider
       } = req.body;
 
       const uniqueSeed = `SEED-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
-      const classNameMatch = subjectName?.match(/Class\s*(\d+)/i);
-      const targetClass = classNameMatch ? classNameMatch[1] : "10";
+      const classLevelRaw = classLevel || req.body.class;
+      const classNameMatch = subjectName?.match(/Class\s*(\d+)/i) || subjectName?.match(/(\d+)(?:st|nd|rd|th)/i);
+      const targetClassNum = classLevelRaw 
+        ? String(classLevelRaw).replace(/\D/g, '') || "10"
+        : (classNameMatch ? classNameMatch[1] : "10");
+      const targetClass = `Class ${targetClassNum}`;
+
       const chapterListString = Array.isArray(selectedChapters) && selectedChapters.length > 0 
         ? selectedChapters.map((c: any) => typeof c === 'string' ? c : (c.title || c.name || String(c))).join(", ")
         : "Full Syllabus";
 
-      const prompt = `You are a Senior CBSE Board Exam Moderator and Subject Matter Expert for ${subjectName} (Code: ${subjectCode}).
-Generate an official-pattern CBSE Class ${targetClass} Question Paper according to latest 2025-2026 syllabus and blueprint guidelines.
+      let blueprintInstructions = "";
+      if (customBlueprint && customBlueprint.enabled && Array.isArray(customBlueprint.sections) && customBlueprint.sections.length > 0) {
+        const customSecStr = customBlueprint.sections.map((s: any, idx: number) => 
+          `- ${s.name || `Section ${String.fromCharCode(65+idx)}`}: ${s.questionCount} question(s) of type '${s.questionType}' (${s.marksPerQuestion} Mark(s) each, Section Total = ${s.questionCount * s.marksPerQuestion} Marks). Description: ${s.description || 'Custom Section'}`
+        ).join("\n");
 
-CRITICAL INSTRUCTIONS - STRICT CHAPTER FILTERING & ANTI-REPETITION:
+        blueprintInstructions = `
+STRICT CUSTOM BLUEPRINT STRUCTURE REQUIRED BY USER:
+You MUST follow this exact user-defined blueprint structure. Generate exactly these sections with the exact question counts and marks:
+${customSecStr}
+Total Paper Marks MUST be exactly ${customBlueprint.totalMarks || totalMarks || 80} Marks.
+`;
+      } else {
+        blueprintInstructions = `
+Mandatory Official CBSE Blueprint Matrix for ${subjectName} (${totalMarks} Marks):
+- IF Primary Classes (Class 1, 2, 3, 4, 5 - Total ${totalMarks} Marks):
+  * Section A: Reading & Comprehension (10-15 Marks) - Short age-appropriate passage with 3-4 simple questions.
+  * Section B: Grammar & Vocabulary (15-20 Marks) - Objective/Fill-in-blanks on Nouns, Verbs, Plurals, Opposites, Gender, Punctuation.
+  * Section C: Writing & Creative Skills (10-15 Marks) - Guided paragraph writing ("My Best Friend", "My School"), picture sentence formation, or custom teacher prompt.
+  * Section D: Textbook Concepts & Short Answers (10-15 Marks) - Simple age-appropriate questions from NCERT Class ${targetClassNum} chapters.
+- IF Class 12 Science/Math (70 Marks): Section A (16 MCQs & AR, 1M = 16M), Section B (5 VSA, 2M = 10M), Section C (7 SA, 3M = 21M), Section D (2 Case Studies, 4M = 8M), Section E (3 LA, 5M = 15M). Total 33 questions.
+- IF Class 12 Science/Math (80 Marks): Section A (20 MCQs & AR, 1M = 20M), Section B (5 VSA, 2M = 10M), Section C (6 SA, 3M = 18M), Section D (4 LA, 5M = 20M), Section E (3 Case Studies, 4M = 12M).
+- IF Class 10/9 Science/Math (80 Marks): Section A (20 MCQs & AR, 1M = 20M), Section B (6 VSA, 2M = 12M), Section C (7 SA, 3M = 21M), Section D (3 LA, 5M = 15M), Section E (3 Case Studies, 4M = 12M).
+- IF Class 9-12 English/Literature (80 Marks): Section A: Reading Skills (20M), Section B: Writing & Grammar (20M), Section C: Literature (40M).
+- If none of the above match exactly, infer the most accurate official CBSE pattern for this specific class and subject.
+`;
+      }
+
+      let juniorPromptInstructions = "";
+      if (juniorCustomPrompt && juniorCustomPrompt.enabled) {
+        juniorPromptInstructions = `
+TEACHER'S CUSTOM WRITING & GRAMMAR INSTRUCTIONS (STRICT COMPLIANCE REQUIRED):
+- Custom Writing Request: ${juniorCustomPrompt.writingPrompt || 'Standard age-appropriate writing'}
+- Custom Grammar Request: ${juniorCustomPrompt.grammarPrompt || 'Standard age-appropriate grammar'}
+`;
+        if (Array.isArray(juniorCustomPrompt.confirmedQuestions) && juniorCustomPrompt.confirmedQuestions.length > 0) {
+          juniorPromptInstructions += `
+Pre-Confirmed Questions by Teacher (MUST BE EXACTLY INCLUDED OR USED AS BASE):
+${JSON.stringify(juniorCustomPrompt.confirmedQuestions)}
+`;
+        }
+      }
+
+      const prompt = `You are a Senior CBSE Board Exam Moderator and Subject Matter Expert for ${subjectName} (Code: ${subjectCode}).
+Generate an official-pattern CBSE ${targetClass} Question Paper according to latest 2025-2026 syllabus and blueprint guidelines.
+
+CRITICAL INSTRUCTIONS - STRICT GRADE LEVEL ACCURACY & CHAPTER FILTERING:
 Generation Request Seed: ${uniqueSeed}
-1. STRICT CHAPTER SCOPE: You MUST ONLY generate questions for the following specified chapters: [${chapterListString}].
+
+${juniorPromptInstructions}
+
+TARGET GRADE LEVEL: ${targetClass} (Class ${targetClassNum})
+1. STRICT GRADE-LEVEL ISOLATION & AGE-APPROPRIATE WRITING SECTION (ABSOLUTE RULE):
+   - IF CLASS 1, 2, 3, 4, or 5 (PRIMARY SCHOOL - AGE 6-10): You MUST generate ONLY age-appropriate primary elementary school questions for Class ${targetClassNum}.
+     * FOR WRITING SECTION: STRICTLY FORBIDDEN from asking formal letters (Letter to Editor, Complaint Letter, Official letters to Principal), formal essays, or complex analytical paragraphs.
+     * WRITING SECTION MUST ONLY BE: Simple 3-4 sentence paragraph writing on familiar topics ("My Best Friend", "My Pet", "My School", "My Favorite Toy"), guided fill-in-the-blanks informal letter to a friend, or picture sentence formation.
+     * For English: Simple phonics, basic grammar (Nouns, Pronouns, Verbs, Adjectives, Singular/Plural, Opposites, Rhyming Words, Simple Punctuation), short age-appropriate reading comprehension (30-50 words max), and simple sentence writing.
+     * STRICT BAN ON SENIOR LITERATURE: You are STRICTLY FORBIDDEN from including ANY Class 9-12 NCERT literature stories, poems, or authors (e.g. Anton Chekhov, Guy de Maupassant, Nelson Mandela, Lencho, A Letter to God, First Flight, Footprints Without Feet, Bholi, Tricki, Valli, Amanda, etc.).
+     * For Science/EVS: Elementary concepts (Plants, Animals, Human Body, Water, Weather, Seasons, Food, Community Helpers).
+     * For Maths: Basic Operations (Addition, Subtraction, Multiplication, Division, Word Problems, Money, Time, Basic Shapes, Place Value).
+   - IF CLASS 6, 7, or 8 (MIDDLE SCHOOL - AGE 11-13): Generate questions strictly appropriate for Class ${targetClassNum} middle school curriculum.
+     * WRITING SECTION: Basic informal letters, short notice, paragraph writing (80-100 words), or guided story writing. NO Class 9-12 advanced formal letters or analytical reports.
+     * STRICTLY BAN Class 9, 10, 11, 12 Literature and advanced senior board topics.
+   - IF CLASS 9 or 10 (SECONDARY BOARD): Generate questions strictly from Class 9 or Class 10 CBSE syllabus respectively, including official board writing skills (Notice, Formal Letter to Editor/Principal, Analytical Paragraph).
+   - IF CLASS 11 or 12 (SENIOR SECONDARY BOARD): Generate questions strictly from Class 11 or Class 12 CBSE senior secondary syllabus, including official senior writing skills (Notice, Formal Letter, Article, Report, Job Application).
+
+2. STRICT CHAPTER SCOPE: You MUST ONLY generate questions for the following specified chapters: [${chapterListString}].
    - CRITICAL PERMANENT RULE: DO NOT generate or include ANY question from chapters that are NOT listed in [${chapterListString}].
    - EVERY question object MUST set the "chapter" field to one of the selected chapters: [${chapterListString}].
-2. ZERO DUPLICATION GUARANTEE: EVERY SINGLE QUESTION in this question paper MUST be 100% unique, distinct, and completely different in topic, question phrasing, numerical values, chemical reactions, diagrams, and question style.
-3. NO CONCEPT REPETITION: Do NOT repeat the same concept, question type, or numerical problem twice in different sections.
+
+3. ZERO DUPLICATION GUARANTEE: EVERY SINGLE QUESTION in this question paper MUST be 100% unique, distinct, and completely different in topic, question phrasing, numerical values, chemical reactions, diagrams, and question style.
+
 4. SUBJECT-SPECIFIC INTEGRITY:
-   - FOR SCIENCE/MATH SUBJECTS: You MUST generate SPECIFIC, solvable mathematical calculations, word problems, physics numericals, or chemistry equations. DO NOT ask generic or meta questions like "Explain the core concepts of Mathematics" or "Discuss the principles of Science". EVERY question must have a specific numeric or factual answer.
-   - FOR LANGUAGES/LITERATURE: Generate specific grammar exercises, reading comprehension passages, and chapter-specific literature questions from [${chapterListString}].
-   - FOR SOCIAL SCIENCE: Generate specific questions about historical dates, events, geography map work, or political case studies from [${chapterListString}].
-5. FRESH NUMERICALS & CONTEXTS: Use novel numerical values, fresh real-world case scenarios, original experiment setups, and distinct assertion-reasoning pairings.
+   - FOR SCIENCE/MATH SUBJECTS: You MUST generate SPECIFIC, age-appropriate, solvable mathematical calculations, word problems, physics numericals, or chemistry equations.
+   - FOR LANGUAGES/LITERATURE: Generate grade-appropriate grammar exercises, reading comprehension passages, and chapter-specific questions from [${chapterListString}].
 
 Paper Details:
+- Target Grade: ${targetClass}
 - Subject: ${subjectName}
-- Total Marks: ${totalMarks || 80}
-- Duration: ${timeMinutes || 180} minutes
+- Total Marks: ${customBlueprint?.enabled ? customBlueprint.totalMarks : (totalMarks || 80)}
+- Duration: ${customBlueprint?.enabled ? customBlueprint.timeMinutes : (timeMinutes || 180)} minutes
 - MANDATORY Chapters Covered ONLY: [${chapterListString}]
 - Target Difficulty: ${difficulty || "Balanced"}
 - Competency/Case-based Question Ratio: ${competencyPercent || 50}%
 
-Mandatory Official CBSE Blueprint Matrix for ${subjectName} (${totalMarks} Marks):
-- IF Class 12 Science/Math (70 Marks): Section A (16 MCQs & AR, 1M = 16M), Section B (5 VSA, 2M = 10M), Section C (7 SA, 3M = 21M), Section D (2 Case Studies, 4M = 8M), Section E (3 LA, 5M = 15M). Total 33 questions.
-- IF Class 12 Science/Math (80 Marks): Section A (20 MCQs & AR, 1M = 20M), Section B (5 VSA, 2M = 10M), Section C (6 SA, 3M = 18M), Section D (4 LA, 5M = 20M), Section E (3 Case Studies, 4M = 12M).
-- IF Class 10/9 Science/Math (80 Marks): Section A (20 MCQs & AR, 1M = 20M), Section B (6 VSA, 2M = 12M), Section C (7 SA, 3M = 21M), Section D (3 LA, 5M = 15M), Section E (3 Case Studies, 4M = 12M).
-- IF English/Literature (80 Marks): Section A: Reading Skills (20M), Section B: Writing & Grammar (20M), Section C: Literature (40M).
-- If none of the above match exactly, infer the most accurate official CBSE pattern for this specific class and subject.
+Blueprint Configuration:
+${blueprintInstructions}
 
 CRITICAL REQUIREMENT FOR CASE STUDY & UNSEEN PASSAGE QUESTIONS:
 For any question that includes a passage, case study scenario, or source data (e.g. in Section E or Reading Section), you MUST explicitly include a top-level key "casePassage" inside the question object containing the full passage excerpt or scenario text.

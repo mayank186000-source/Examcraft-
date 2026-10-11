@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Subject, PaperConfig, CustomBranding, TestPreset, Question } from '../types';
 import { CBSE_SUBJECTS, CBSE_CLASS_3_SUBJECTS, CBSE_CLASS_4_SUBJECTS, CBSE_CLASS_5_SUBJECTS, CBSE_CLASS_6_SUBJECTS, CBSE_CLASS_7_SUBJECTS, CBSE_CLASS_8_SUBJECTS, CBSE_CLASS_9_SUBJECTS, CBSE_CLASS_10_SUBJECTS, CBSE_CLASS_11_SUBJECTS, CBSE_CLASS_12_SUBJECTS } from '../data/cbseData';
 import { RegionCropper } from './RegionCropper';
@@ -40,6 +41,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getVaultStats, parseDocumentAndExtractQuestions, saveCustomQuestionsToServerVault } from '../utils/questionVault';
+import { CustomBlueprintModal } from './CustomBlueprintModal';
+import { JuniorWritingGrammarModal } from './JuniorWritingGrammarModal';
+import { CustomBlueprint, JuniorCustomPrompt } from '../types';
 
 // Helper to calculate cropped image canvas
 async function getCroppedImg(imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string> {
@@ -94,6 +98,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
 }) => {
   const { isAdmin } = useAuth();
   const [selectedClass, setSelectedClass] = useState<'12' | '11' | '10' | '9' | '8' | '7' | '6' | '5' | '4' | '3'>('10');
+  const [activeWing, setActiveWing] = useState<'senior' | 'junior'>('senior');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('science-086');
 
   // Synchronize class and subject changes with 3D NCERT Animated Background
@@ -108,11 +113,56 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
   const [selectedStream, setSelectedStream] = useState<'All' | 'Science' | 'Commerce' | 'Arts' | 'Common'>('All');
   const [preset, setPreset] = useState<TestPreset>('board80');
   const [customPaperTitle, setCustomPaperTitle] = useState<string>('');
+  const [customBlueprint, setCustomBlueprint] = useState<CustomBlueprint | undefined>(undefined);
+  const [isBlueprintModalOpen, setIsBlueprintModalOpen] = useState<boolean>(false);
+  const [juniorCustomPrompt, setJuniorCustomPrompt] = useState<JuniorCustomPrompt | undefined>(undefined);
+  const [isJuniorModalOpen, setIsJuniorModalOpen] = useState<boolean>(false);
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [generationMode, setGenerationMode] = useState<'smart_auto' | 'vault_remix' | 'pure_ai'>('smart_auto');
   const [competencyRatio, setCompetencyRatio] = useState<number>(50);
   const [includeGeneralInstructions, setIncludeGeneralInstructions] = useState<boolean>(true);
   const [includeSolutions, setIncludeSolutions] = useState<boolean>(true);
+
+  // Section refs for automatic step-by-step smooth auto-scroll
+  const subjectSectionRef = useRef<HTMLDivElement>(null);
+  const patternSectionRef = useRef<HTMLDivElement>(null);
+  const syllabusSectionRef = useRef<HTMLDivElement>(null);
+  const competencySectionRef = useRef<HTMLDivElement>(null);
+
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
+    setTimeout(() => {
+      if (ref.current) {
+        const yOffset = -85; // Header offset space so section title is clearly visible
+        const y = ref.current.getBoundingClientRect().top + window.pageYOffset + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    }, 80);
+  };
+
+  // Micro-animation & Skeleton Feedback state for Paper Generation
+  const [prevGenerating, setPrevGenerating] = useState(isGenerating);
+  const [showSuccessBadge, setShowSuccessBadge] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  useEffect(() => {
+    if (prevGenerating && !isGenerating) {
+      setShowSuccessBadge(true);
+      const timer = setTimeout(() => setShowSuccessBadge(false), 4000);
+      return () => clearTimeout(timer);
+    }
+    setPrevGenerating(isGenerating);
+  }, [isGenerating, prevGenerating]);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev + 1) % 3);
+    }, 1100);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   // Vault Stats for live count
   const vaultStats = getVaultStats();
@@ -270,7 +320,8 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
     }
   };
 
-  // Difficulty distribution
+  // Difficulty distribution & cognitive level selector
+  const [difficultyPreset, setDifficultyPreset] = useState<'easy' | 'medium' | 'hard' | 'custom'>('medium');
   const [difficultySplit, setDifficultySplit] = useState({
     easy: 30,
     medium: 50,
@@ -467,15 +518,17 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
       schoolName: branding.schoolName || 'DPS Senior Secondary School, New Delhi',
       examCode: `${branding.examCodePrefix || `EXAMIDEA-${selectedClass}`}-${currentSubject.code}`,
       date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-      durationMinutes: activePresetInfo.time,
-      totalMarks: activePresetInfo.marks,
+      durationMinutes: (customBlueprint?.enabled && customBlueprint.sections.length > 0) ? customBlueprint.timeMinutes : activePresetInfo.time,
+      totalMarks: (customBlueprint?.enabled && customBlueprint.sections.length > 0) ? customBlueprint.totalMarks : activePresetInfo.marks,
       selectedChapterIds: selectedChapters.length > 0 ? selectedChapters : currentSubject.chapters.map(c => c.id),
       competencyRatio,
       difficultySplit,
       watermarkText: branding.watermark || 'EXAMIDEA MODEL PAPER',
       includeGeneralInstructions,
       includeSolutions,
-      useAI: isAIMode
+      useAI: isAIMode,
+      customBlueprint: (customBlueprint?.enabled && customBlueprint.sections.length > 0) ? customBlueprint : undefined,
+      juniorCustomPrompt: (juniorCustomPrompt?.enabled) ? juniorCustomPrompt : undefined,
     };
 
     onGeneratePaper(config);
@@ -493,17 +546,18 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
               <span>Official 2025-2026 CBSE Board Blueprint Engine</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-950 dark:text-white leading-tight">
+            <h1 data-book-reveal="heading" className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-950 dark:text-white leading-tight">
               CBSE Test Papers in <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 dark:from-blue-400 dark:via-indigo-300 dark:to-emerald-400">10 Seconds</span>
             </h1>
 
-            <p className="text-sm sm:text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-2xl font-bold">
+            <p data-book-reveal="text" className="text-sm sm:text-base text-slate-800 dark:text-slate-200 leading-relaxed max-w-2xl font-bold">
               Trusted by 50,000+ educators and top-scoring students. Generate 100% board-compliant question papers for Classes 9th, 10th, 11th & 12th with bilingual support, case studies, and step-wise marking schemes.
             </p>
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
               <a
+                data-book-reveal="primary"
                 href="#generator-form"
                 className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-base px-8 py-4 rounded-full shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 transition-all flex items-center justify-center gap-3 cursor-pointer group btn-3d"
               >
@@ -512,6 +566,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
               </a>
 
               <button
+                data-book-reveal="secondary"
                 onClick={onOpenPaperCodeModal}
                 className="w-full sm:w-auto bg-white/95 hover:bg-white dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-extrabold text-sm px-6 py-4 rounded-full border border-slate-300 dark:border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
@@ -538,7 +593,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
           </div>
 
           {/* Right Interactive Mockup Visual Element (Auto-changing 4 Sample Slides) */}
-          <div className="lg:col-span-5">
+          <div data-book-reveal="content" className="lg:col-span-5">
             <div className="hover-reveal-card p-5 sm:p-6 rounded-2xl relative space-y-4 transition-all">
               {/* Card Top Bar with Slide Counter */}
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
@@ -771,17 +826,62 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
         </div>
       </div>
 
-      {/* 3. CLASS SELECTION CARDS */}
+      {/* 3. CLASS SELECTION CARDS WITH WING FILTERS */}
       <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Choose Target Class</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Select class to load official CBSE syllabus and unit blueprints</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Choose Target Class</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Select class wing to load grade-isolated curriculum & pattern</p>
+          </div>
+
+          {/* Wing Tabs */}
+          <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveWing('senior');
+                if (['8','7','6','5','4','3'].includes(selectedClass)) {
+                  setSelectedClass('10');
+                  setSelectedSubjectId('science-086');
+                  setSelectedChapters([]);
+                }
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeWing === 'senior'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>Board & Senior Wing (9th-12th)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveWing('junior');
+                if (['12','11','10','9'].includes(selectedClass)) {
+                  setSelectedClass('3');
+                  setSelectedSubjectId('class3-science-evs');
+                  setSelectedChapters([]);
+                }
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeWing === 'junior'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Junior & Middle Wing (3rd-8th)</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
           {[
             {
               id: '12',
+              wing: 'senior',
               title: 'Class 12th',
               badge: 'Senior Secondary',
               subjects: 'Physics, Chem, Math, Bio, CS + 5 more',
@@ -791,6 +891,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '11',
+              wing: 'senior',
               title: 'Class 11th',
               badge: 'Higher Secondary',
               subjects: 'Physics, Chem, Math, Bio + 4 more',
@@ -800,6 +901,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '10',
+              wing: 'senior',
               title: 'Class 10th',
               badge: 'Secondary Board',
               subjects: 'Science, Math, SST, Eng, Hindi',
@@ -809,6 +911,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '9',
+              wing: 'senior',
               title: 'Class 9th',
               badge: 'Foundation Board',
               subjects: 'Science, Math, SST, Eng, Hindi',
@@ -818,6 +921,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '8',
+              wing: 'junior',
               title: 'Class 8th',
               badge: 'Middle School',
               subjects: 'Science, Math, SST, Eng, Hindi',
@@ -827,6 +931,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '7',
+              wing: 'junior',
               title: 'Class 7th',
               badge: 'Middle School',
               subjects: 'Science, Math, SST, Eng, Hindi',
@@ -836,6 +941,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '6',
+              wing: 'junior',
               title: 'Class 6th',
               badge: 'Middle School',
               subjects: 'Science, Math, SST, Eng, Hindi',
@@ -845,32 +951,37 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             },
             {
               id: '5',
+              wing: 'junior',
               title: 'Class 5th',
               badge: 'Primary School',
               subjects: 'EVS/Science, Math, Eng, Hindi',
               chapters: '30+ Primary Chapters',
-              marks: '80 Marks Pattern',
+              marks: '50/80 Marks Pattern',
               defaultSub: 'class5-science-evs'
             },
             {
               id: '4',
+              wing: 'junior',
               title: 'Class 4th',
               badge: 'Primary School',
               subjects: 'EVS/Science, Math, Eng, Hindi',
               chapters: '25+ NCERT Chapters',
-              marks: '80 Marks Pattern',
+              marks: '40/50 Marks Pattern',
               defaultSub: 'class4-science-evs'
             },
             {
               id: '3',
+              wing: 'junior',
               title: 'Class 3rd',
               badge: 'Primary School',
               subjects: 'EVS/Science, Math, Eng, Hindi',
               chapters: '20+ NCERT Chapters',
-              marks: '80 Marks Pattern',
+              marks: '30/40 Marks Pattern',
               defaultSub: 'class3-science-evs'
             }
-          ].map((cItem) => {
+          ]
+          .filter((item) => item.wing === activeWing)
+          .map((cItem) => {
             const isSelected = selectedClass === cItem.id;
             return (
               <button
@@ -880,6 +991,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   setSelectedClass(cItem.id as any);
                   setSelectedSubjectId(cItem.defaultSub);
                   setSelectedChapters([]);
+                  scrollToSection(subjectSectionRef);
                 }}
                 className={`p-3 sm:p-5 text-left cursor-pointer transition-all relative rounded-2xl ${
                   isSelected
@@ -934,7 +1046,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
           <div className="lg:col-span-8 space-y-8">
 
             {/* STEP 1: Select Subject */}
-            <div className="edtech-card p-6 space-y-4">
+            <div ref={subjectSectionRef} className="edtech-card p-6 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-xs">
@@ -988,6 +1100,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                       onClick={() => {
                         setSelectedSubjectId(sub.id);
                         setSelectedChapters([]);
+                        scrollToSection(patternSectionRef);
                       }}
                       className={`p-3 sm:p-3.5 rounded-2xl text-left transition-all relative cursor-pointer ${
                         isSelected
@@ -1022,7 +1135,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             </div>
 
             {/* STEP 2: Choose Test Pattern / Preset */}
-            <div className="edtech-card p-6 space-y-4">
+            <div ref={patternSectionRef} className="edtech-card p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-xs">
@@ -1030,10 +1143,98 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Choose Test Pattern & Duration</h3>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Select full board paper, periodic test, or unit test pattern</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Select full board paper, periodic test, or scan/build custom blueprint</p>
                   </div>
                 </div>
               </div>
+
+              {/* Custom / AI Blueprint Banner Callout */}
+              <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-purple-950 text-white p-4 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-indigo-700/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-500/30 rounded-xl border border-indigo-400/30 shrink-0">
+                    <Sparkles className="w-5 h-5 text-indigo-300 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs flex items-center gap-2">
+                      Custom & AI Blueprint Builder
+                      {customBlueprint?.enabled && (
+                        <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-black rounded-full">
+                          ACTIVE ({customBlueprint.totalMarks} Marks)
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-[11px] text-indigo-200">
+                      Upload PDF/Image of your question paper pattern or build custom sections
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {customBlueprint?.enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomBlueprint(undefined)}
+                      className="px-3 py-1.5 text-xs text-rose-300 hover:text-rose-100 hover:bg-rose-950/60 rounded-xl transition-colors cursor-pointer"
+                      title="Clear custom blueprint and revert to default CBSE pattern"
+                    >
+                      Reset Pattern
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsBlueprintModalOpen(true)}
+                    className="w-full sm:w-auto px-4 py-2 bg-white text-indigo-950 hover:bg-indigo-50 font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    {customBlueprint?.enabled ? 'Edit Blueprint' : 'Scan PDF/Image or Custom Pattern'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Junior Wing Custom Writing & Grammar AI Callout */}
+              {(activeWing === 'junior' || ['8','7','6','5','4','3'].includes(selectedClass)) && (
+                <div className="bg-gradient-to-r from-amber-900 via-amber-950 to-orange-950 text-white p-4 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-amber-700/50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-500/30 rounded-xl border border-amber-400/30 shrink-0">
+                      <FileText className="w-5 h-5 text-amber-300 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs flex items-center gap-2">
+                        Junior Writing & Grammar Customizer
+                        {juniorCustomPrompt?.enabled && (
+                          <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-black rounded-full">
+                            ACTIVE & CONFIRMED
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-[11px] text-amber-200">
+                        Specify exact writing topics (essay/letter/story) & grammar concepts, preview AI questions & confirm before generating paper.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {juniorCustomPrompt?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => setJuniorCustomPrompt(undefined)}
+                        className="px-3 py-1.5 text-xs text-amber-200 hover:text-white hover:bg-amber-900/60 rounded-xl transition-colors cursor-pointer"
+                        title="Clear custom writing/grammar instructions"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsJuniorModalOpen(true)}
+                      className="w-full sm:w-auto px-4 py-2 bg-amber-400 text-amber-950 hover:bg-amber-300 font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-950" />
+                      {juniorCustomPrompt?.enabled ? 'Edit Topics' : 'Customize Writing & Grammar'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                 {(['board80', 'periodic40', 'unit20', 'custom'] as TestPreset[]).map((key) => {
@@ -1043,7 +1244,10 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setPreset(key)}
+                      onClick={() => {
+                        setPreset(key);
+                        scrollToSection(syllabusSectionRef);
+                      }}
                       className={`p-3.5 rounded-2xl text-left transition-all cursor-pointer ${
                         isSelected
                           ? 'ring-2 ring-blue-600 bg-blue-50/90 dark:bg-blue-950/80 shadow-md'
@@ -1111,7 +1315,7 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
             </div>
 
             {/* STEP 3: Select Chapters */}
-            <div className="edtech-card p-6 space-y-4">
+            <div ref={syllabusSectionRef} className="edtech-card p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-xs">
@@ -1166,18 +1370,210 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   );
                 })}
               </div>
+
+              {/* Chapter Lock Active Notification Card */}
+              {selectedChapters.length > 0 && selectedChapters.length < currentSubject.chapters.length && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3.5 bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 dark:border-amber-700/50 rounded-2xl flex items-start gap-3 text-amber-900 dark:text-amber-200 text-xs shadow-xs"
+                >
+                  <div className="p-2 bg-amber-500/20 rounded-xl shrink-0 text-amber-600 dark:text-amber-400">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-amber-800 dark:text-amber-300 uppercase tracking-wider text-[11px]">
+                        Strict Chapter Lock Active ({selectedChapters.length} {selectedChapters.length === 1 ? 'Chapter' : 'Chapters'} Selected)
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-bold leading-relaxed text-slate-700 dark:text-amber-200/90">
+                      Aapka paper <strong className="text-slate-900 dark:text-amber-100 underline decoration-amber-400 font-black">strictly chuney gaye {selectedChapters.length} chapter(s)</strong> se hi generate hoga. Full mark blueprint ko pura karne ke liye system is selected topic ke high-quality unique variations create karega. Doosre chapters ka ek bhi question nahi aayega.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Proceed to Competency Quick Action */}
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(competencySectionRef)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer transition-all"
+                >
+                  <span>Proceed to Competency & Blueprint</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* STEP 4: Competency & Blueprint */}
-            <div className="edtech-card p-6 space-y-4">
+            <div ref={competencySectionRef} className="edtech-card p-6 space-y-4">
               <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-xs">
                   4
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Competency & Blueprint</h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">CBSE mandates ~50% Application & Case Study questions</p>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Difficulty & Competency Blueprint</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Control paper difficulty and CBSE ~50% competency requirement</p>
                 </div>
+              </div>
+
+              {/* Difficulty Level Selector */}
+              <div className="space-y-3 pt-1 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-950 dark:text-slate-100 flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Cognitive Demand / Difficulty Level:</span>
+                  </label>
+                  <span className="text-[11px] font-extrabold text-blue-700 dark:text-blue-300">
+                    {difficultySplit.easy}% Easy | {difficultySplit.medium}% Med | {difficultySplit.hard}% Hard
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDifficultyPreset('easy');
+                      setDifficultySplit({ easy: 70, medium: 20, hard: 10 });
+                    }}
+                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                      difficultyPreset === 'easy'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-500 text-emerald-950 dark:text-emerald-100 ring-2 ring-emerald-500/50 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-emerald-700 dark:text-emerald-400">🟢 Easy</span>
+                      {difficultyPreset === 'easy' && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                    </div>
+                    <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 mt-1">Foundation / Revision (70:20:10)</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDifficultyPreset('medium');
+                      setDifficultySplit({ easy: 30, medium: 50, hard: 20 });
+                    }}
+                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                      difficultyPreset === 'medium'
+                        ? 'bg-blue-50 dark:bg-blue-950/80 border-blue-500 text-blue-950 dark:text-blue-100 ring-2 ring-blue-500/50 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-blue-700 dark:text-blue-400">🔵 Medium</span>
+                      {difficultyPreset === 'medium' && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                    </div>
+                    <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 mt-1">Standard Board Level (30:50:20)</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDifficultyPreset('hard');
+                      setDifficultySplit({ easy: 10, medium: 40, hard: 50 });
+                    }}
+                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                      difficultyPreset === 'hard'
+                        ? 'bg-rose-50 dark:bg-rose-950/80 border-rose-500 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/50 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-rose-700 dark:text-rose-400">🔴 Hard</span>
+                      {difficultyPreset === 'hard' && <Check className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                    </div>
+                    <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 mt-1">HOTS & Advanced (10:40:50)</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDifficultyPreset('custom');
+                    }}
+                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                      difficultyPreset === 'custom'
+                        ? 'bg-amber-50 dark:bg-amber-950/80 border-amber-500 text-amber-950 dark:text-amber-100 ring-2 ring-amber-500/50 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-amber-700 dark:text-amber-400">⚙️ Custom</span>
+                      {difficultyPreset === 'custom' && <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                    </div>
+                    <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 mt-1">Manual Split Sliders</p>
+                  </button>
+                </div>
+
+                {difficultyPreset === 'custom' && (
+                  <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 space-y-2 mt-2">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-emerald-800 dark:text-emerald-300">Easy ({difficultySplit.easy}%):</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={difficultySplit.easy}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            const rem = 100 - val;
+                            setDifficultySplit({
+                              easy: val,
+                              medium: Math.round(rem * 0.6),
+                              hard: Math.round(rem * 0.4)
+                            });
+                          }}
+                          className="w-full accent-emerald-600 h-1.5"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-blue-800 dark:text-blue-300">Medium ({difficultySplit.medium}%):</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={difficultySplit.medium}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            const rem = 100 - val;
+                            setDifficultySplit({
+                              easy: Math.round(rem * 0.5),
+                              medium: val,
+                              hard: Math.round(rem * 0.5)
+                            });
+                          }}
+                          className="w-full accent-blue-600 h-1.5"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-rose-800 dark:text-rose-300">Hard ({difficultySplit.hard}%):</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={difficultySplit.hard}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            const rem = 100 - val;
+                            setDifficultySplit({
+                              easy: Math.round(rem * 0.4),
+                              medium: Math.round(rem * 0.6),
+                              hard: val
+                            });
+                          }}
+                          className="w-full accent-rose-600 h-1.5"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -1241,6 +1637,12 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
                   <span className="font-black text-slate-950 dark:text-white">{currentSubject.name} ({currentSubject.code})</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
+                  <span>Difficulty Level:</span>
+                  <span className="font-black text-slate-950 dark:text-white capitalize">
+                    {difficultyPreset === 'easy' ? '🟢 Easy (Foundation)' : difficultyPreset === 'hard' ? '🔴 Hard (HOTS)' : difficultyPreset === 'custom' ? `⚙️ Custom (${difficultySplit.easy}/${difficultySplit.medium}/${difficultySplit.hard})` : '🔵 Standard Board'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/70 dark:border-slate-800">
                   <span>Target Marks:</span>
                   <span className="font-black text-blue-700 dark:text-amber-300">{activePresetInfo.marks} Marks</span>
                 </div>
@@ -1257,6 +1659,70 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
               </div>
 
               <div className="pt-2 space-y-3">
+                {/* Subtle Loading Skeletons when paper generation begins */}
+                <AnimatePresence>
+                  {isGenerating && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                      exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                      transition={{ duration: 0.25 }}
+                      className="p-4 bg-slate-900/90 dark:bg-slate-950/90 border border-blue-500/40 rounded-2xl space-y-3 overflow-hidden shadow-lg shadow-blue-500/10 text-left"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                          <Sparkles className="w-4 h-4 animate-spin text-blue-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-white truncate">
+                            {loadingStep === 0 && '1. Analyzing CBSE Blueprint & Chapters...'}
+                            {loadingStep === 1 && '2. Assembling Competency & Case Studies...'}
+                            {loadingStep === 2 && '3. Generating Bilingual Marking Scheme...'}
+                          </p>
+                          <p className="text-[10px] text-blue-300 font-mono font-bold">ExamCraft AI Engine • Processing</p>
+                        </div>
+                      </div>
+
+                      {/* Animated Shimmer Lines */}
+                      <div className="space-y-2 pt-1">
+                        <div className="h-2.5 bg-gradient-to-r from-blue-500/20 via-blue-400/50 to-blue-500/20 rounded-full animate-pulse w-full" />
+                        <div className="h-2.5 bg-gradient-to-r from-indigo-500/20 via-indigo-400/50 to-indigo-500/20 rounded-full animate-pulse w-4/5" />
+                        <div className="h-2.5 bg-gradient-to-r from-cyan-500/20 via-cyan-400/50 to-cyan-500/20 rounded-full animate-pulse w-2/3" />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Success Micro-Animation when paper generation completes */}
+                <AnimatePresence>
+                  {showSuccessBadge && !isGenerating && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                      transition={{ duration: 0.35, type: 'spring', stiffness: 300, damping: 20 }}
+                      className="p-3.5 bg-gradient-to-r from-emerald-950/95 via-emerald-900/95 to-teal-950/95 border border-emerald-500/50 text-white rounded-2xl flex items-center justify-between gap-3 shadow-xl shadow-emerald-900/20 text-left"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-md">
+                          <Check className="w-4 h-4 stroke-[3]" />
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-black text-emerald-200">Test Paper Assembled & Ready!</h5>
+                          <p className="text-[10px] text-emerald-300/90 font-medium">Opening full paper preview...</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSuccessBadge(false)}
+                        className="text-emerald-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <button
                   type="button"
                   onClick={() => handleSubmit('smart_auto')}
@@ -1769,6 +2235,28 @@ export const GeneratorTab: React.FC<GeneratorTabProps> = ({
           </div>
         </div>
       )}
+      {/* Custom Blueprint Modal */}
+      <CustomBlueprintModal
+        isOpen={isBlueprintModalOpen}
+        onClose={() => setIsBlueprintModalOpen(false)}
+        currentBlueprint={customBlueprint}
+        onApplyBlueprint={(blueprint) => {
+          setCustomBlueprint(blueprint);
+          setIsBlueprintModalOpen(false);
+        }}
+      />
+      {/* Junior Writing & Grammar Customizer Modal */}
+      <JuniorWritingGrammarModal
+        isOpen={isJuniorModalOpen}
+        onClose={() => setIsJuniorModalOpen(false)}
+        selectedClass={selectedClass}
+        subjectName={currentSubject.name}
+        currentCustomPrompt={juniorCustomPrompt}
+        onApplyPrompt={(customPrompt) => {
+          setJuniorCustomPrompt(customPrompt);
+          setIsJuniorModalOpen(false);
+        }}
+      />
     </div>
   );
 };

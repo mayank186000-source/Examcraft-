@@ -47,6 +47,11 @@ service cloud.firestore {
       allow read, create, update, delete: if true;
     }
 
+    // User Feedbacks & Suggestions Collection
+    match /feedbacks/{feedbackId} {
+      allow read, create, update, delete: if true;
+    }
+
     // Default deny catch-all
     match /{document=**} {
       allow read, write: if false;

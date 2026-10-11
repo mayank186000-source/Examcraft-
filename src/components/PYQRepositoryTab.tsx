@@ -83,15 +83,15 @@ export const PYQRepositoryTab: React.FC<PYQRepositoryTabProps> = ({
   const getClassBadge = (cls: string) => {
     switch (cls) {
       case '10':
-        return { label: 'Class 10th Board', bg: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800' };
+        return { label: 'Class 10th Board', bg: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700' };
       case '12':
-        return { label: 'Class 12th Board', bg: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800' };
+        return { label: 'Class 12th Board', bg: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700' };
       case '9':
-        return { label: 'Class 9th Annual', bg: 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800' };
+        return { label: 'Class 9th Annual', bg: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700' };
       case '11':
-        return { label: 'Class 11th Annual', bg: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800' };
+        return { label: 'Class 11th Annual', bg: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700' };
       default:
-        return { label: `Class ${cls}th`, bg: 'bg-stone-100 text-stone-900 border-stone-300' };
+        return { label: `Class ${cls}th`, bg: 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700' };
     }
   };
 
@@ -147,48 +147,47 @@ export const PYQRepositoryTab: React.FC<PYQRepositoryTabProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Hero Header */}
-      <div className="bg-stone-900 text-white rounded-3xl p-6 sm:p-8 border border-stone-800 shadow-xl space-y-4 relative overflow-hidden">
-        <div className="absolute -top-12 -right-12 w-64 h-64 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-2 bg-emerald-800/80 border border-emerald-700 text-emerald-200 px-3 py-1 rounded-full text-xs font-semibold">
-              <History className="w-3.5 h-3.5 text-amber-300" />
-              <span>Student-Friendly CBSE PYQ Repository (2016-2025: Last 10 Years)</span>
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-3xl">
+            <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-md text-xs font-semibold">
+              <History className="w-3.5 h-3.5 text-slate-500" />
+              <span>Official CBSE Papers (2016–2025)</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Class-wise & Subject-wise Official CBSE Papers
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
+              Previous Year Question Papers
             </h1>
-            <p className="text-xs sm:text-sm text-stone-300 leading-relaxed">
-              Find real board question papers arranged by <strong>Class (9th, 10th, 11th, 12th)</strong>, <strong>Subject</strong>, and <strong>Year</strong>. Preview questions, view step-by-step marking schemes, or download/print with 1-click!
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
+              Browse official CBSE question papers arranged by class, subject, and examination year. Includes step-wise marking schemes and printable layouts.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 bg-stone-800/90 border border-stone-700/80 px-4 py-3 rounded-2xl">
-            <GraduationCap className="w-8 h-8 text-amber-400 shrink-0" />
+          <div className="flex items-center gap-3 shrink-0 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-4 py-3 rounded-lg">
+            <GraduationCap className="w-7 h-7 text-blue-600 dark:text-blue-400 shrink-0" />
             <div>
-              <p className="text-xs font-bold text-white">{filteredPyqs.length} Papers Available</p>
-              <p className="text-[11px] text-stone-400">100% Free PDF / Print Access</p>
+              <p className="text-xs font-bold text-slate-900 dark:text-white">{filteredPyqs.length} Papers Available</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Board Aligned</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* FILTER CONTROLS BAR */}
-      <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         
         {/* Row 1: Class Selection Tabs */}
         <div className="space-y-1.5">
-          <label className="text-xs font-black uppercase text-stone-500 dark:text-stone-400 tracking-wider flex items-center gap-1.5">
-            <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-            <span>1. Choose Class (कक्षा चुनें):</span>
+          <label className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider flex items-center gap-1.5">
+            <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+            <span>Select Target Class:</span>
           </label>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {[
-              { id: 'all', label: 'All Classes (सभी कक्षाएं)' },
-              { id: '10', label: 'Class 10th Board' },
-              { id: '12', label: 'Class 12th Board' },
+              { id: 'all', label: 'All Classes' },
+              { id: '10', label: 'Class 10th' },
+              { id: '12', label: 'Class 12th' },
               { id: '9', label: 'Class 9th' },
               { id: '11', label: 'Class 11th' },
               { id: '8', label: 'Class 8th' },
@@ -202,12 +201,12 @@ export const PYQRepositoryTab: React.FC<PYQRepositoryTabProps> = ({
                 key={cls.id}
                 onClick={() => {
                   setSelectedClass(cls.id);
-                  setSelectedSubject('all'); // reset subject on class change
+                  setSelectedSubject('all');
                 }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                   selectedClass === cls.id
-                    ? 'bg-emerald-700 text-white shadow-md shadow-emerald-900/20 ring-2 ring-emerald-500'
-                    : 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 <span>{cls.label}</span>
@@ -359,7 +358,7 @@ export const PYQRepositoryTab: React.FC<PYQRepositoryTabProps> = ({
             return (
               <div
                 key={pyq.id}
-                className="bg-white dark:bg-stone-900 rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 group relative overflow-hidden"
+                className="edtech-card pyq-card rounded-2xl p-5 border border-stone-200 dark:border-stone-800 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 group relative overflow-hidden"
               >
                 <div className="space-y-3">
                   {/* Card Header Badges */}

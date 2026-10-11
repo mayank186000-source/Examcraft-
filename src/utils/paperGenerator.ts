@@ -3,7 +3,7 @@ import { CBSE_SUBJECTS, PRELOADED_QUESTIONS } from '../data/cbseData';
 import { MATH_MCQ_BANK, SCIENCE_MCQ_BANK, SOCIAL_MCQ_BANK, ENGLISH_MCQ_BANK, IT_MCQ_BANK, HINDI_A_MCQ_BANK, HINDI_B_MCQ_BANK, PHYSICS_11_MCQ_BANK, CHEMISTRY_11_MCQ_BANK, MATH_11_MCQ_BANK, ENGLISH_11_MCQ_BANK } from '../data/textbookQuestions';
 import { getMasterPool } from '../data/masterQuestionPool';
 import { generatePaperCode } from './paperRegistry';
-import { generateCombinatorialPaperFromVault } from './questionVault';
+import { generateCombinatorialPaperFromVault, sanitizeQuestionOptions } from './questionVault';
 
 export function getGeneralInstructions(totalMarks: number, timeMinutes: number, subjectId?: string, subjectName?: string): string[] {
   const s = (subjectId || '').toLowerCase();
@@ -141,24 +141,78 @@ function generateSubjectMcq(subjectId: string, idx: number, usedTexts: Set<strin
     }
     const item = master.mcqs[pickIdx];
     usedTexts.add(item.q);
-    return {
+    return sanitizeQuestionOptions({
       id: `gen-${subjectId}-mcq-${ts}-${idx}`,
       subjectId,
       chapterId: 'ch1',
       chapterName: item.ch,
-      type: idx % 5 === 0 ? 'ar' : 'mcq',
+      type: (item.q.toLowerCase().includes('assertion') || item.q.toLowerCase().includes('reason')) ? 'ar' : 'mcq',
       marks: 1,
       difficulty: 'medium',
       isCompetency: idx % 2 === 1,
       questionText: sanitize(item.q),
-      options: shuffleArray((item.opts || ['A) Option 1', 'B) Option 2', 'C) Option 3', 'D) Option 4']).map(sanitize)),
+      options: shuffleArray((item.opts || []).map(sanitize)),
       correctAnswer: sanitize(item.ans),
       markingScheme: `1 Mark for choosing correct option (${item.ans.charAt(0)}).`,
       explanation: item.exp || 'Official CBSE Board Marking Scheme Requirement.'
-    };
+    });
   }
 
   let bank: { q: string; opts: string[]; ans: string; ch: string }[] | null = null;
+
+  const sLower = (subjectId || '').toLowerCase();
+  if (sLower.includes('class3') || sLower.includes('c3-') || sLower.includes('083-') || sLower.includes('class4') || sLower.includes('c4-') || sLower.includes('084-') || sLower.includes('class5') || sLower.includes('c5-') || sLower.includes('085-evs') || sLower.includes('085-mth') || sLower.includes('085-eng') || sLower.includes('085-hin')) {
+    let pBank = [
+      { q: "Which of the following is a living thing?", opts: ["A) Plant", "B) Stone", "C) Chair", "D) Toy"], ans: "A) Plant", ch: "Living & Non-Living" },
+      { q: "What is the primary natural source of water on Earth?", opts: ["A) Rain", "B) Tap", "C) Tank", "D) Bottle"], ans: "A) Rain", ch: "Water O' Water!" },
+      { q: "How many sides does a triangle have?", opts: ["A) 3", "B) 4", "C) 5", "D) 2"], ans: "A) 3", ch: "Basic Shapes" },
+      { q: "What is 20 + 35?", opts: ["A) 55", "B) 45", "C) 60", "D) 50"], ans: "A) 55", ch: "Addition" },
+      { q: "Which organ helps us to see things around us?", opts: ["A) Eyes", "B) Ears", "C) Nose", "D) Hands"], ans: "A) Eyes", ch: "Sense Organs" }
+    ];
+    if (sLower.includes('math')) {
+      pBank = [
+        { q: "What is the expanded form of 345?", opts: ["A) 300 + 40 + 5", "B) 30 + 4 + 5", "C) 300 + 4", "D) 3000 + 45"], ans: "A) 300 + 40 + 5", ch: "Fun with Numbers" },
+        { q: "1 Meter equals how many Centimeters?", opts: ["A) 100 cm", "B) 10 cm", "C) 1000 cm", "D) 50 cm"], ans: "A) 100 cm", ch: "Measurement" },
+        { q: "What is 5 × 4?", opts: ["A) 20", "B) 15", "C) 25", "D) 10"], ans: "A) 20", ch: "How Many Times?" },
+        { q: "How many edges does a square have?", opts: ["A) 4", "B) 3", "C) 0", "D) 5"], ans: "A) 4", ch: "Shapes & Designs" }
+      ];
+    } else if (sLower.includes('hin')) {
+      pBank = [
+        { q: "'दिन' शब्द का विलोम शब्द क्या है?", opts: ["A) रात", "B) शाम", "C) सुबह", "D) दोपहर"], ans: "A) रात", ch: "व्याकरण - विलोम" },
+        { q: "'लड़का' का बहुवचन रूप क्या है?", opts: ["A) लड़के", "B) लड़कों", "C) लड़कियाँ", "D) बालकों"], ans: "A) लड़के", ch: "व्याकरण - वचन" },
+        { q: "जल का पर्यायवाची शब्द छाँटिए:", opts: ["A) पानी", "B) हवा", "C) आग", "D) फल"], ans: "A) पानी", ch: "पर्यायवाची शब्द" }
+      ];
+    } else if (sLower.includes('eng')) {
+      pBank = [
+        { q: "Which word is the opposite of 'COLD'?", opts: ["A) Hot", "B) Ice", "C) Soft", "D) Wet"], ans: "A) Hot", ch: "Opposites" },
+        { q: "Identify the Noun in: 'The boy plays with a ball.'", opts: ["A) Boy", "B) Plays", "C) With", "D) Fast"], ans: "A) Boy", ch: "Nouns" },
+        { q: "Choose the correct article: 'I saw _____ elephant.'", opts: ["A) an", "B) a", "C) the", "D) no article"], ans: "A) an", ch: "Articles" }
+      ];
+    }
+    let pickIdx = idx % pBank.length;
+    let attempts = 0;
+    while (usedTexts.has(pBank[pickIdx].q) && attempts < pBank.length) {
+      pickIdx = (pickIdx + 1) % pBank.length;
+      attempts++;
+    }
+    const item = pBank[pickIdx];
+    usedTexts.add(item.q);
+    return sanitizeQuestionOptions({
+      id: `gen-${subjectId}-mcq-${ts}-${idx}`,
+      subjectId,
+      chapterId: 'ch1',
+      chapterName: item.ch,
+      type: 'mcq',
+      marks: 1,
+      difficulty: 'easy',
+      isCompetency: false,
+      questionText: sanitize(item.q),
+      options: shuffleArray((item.opts || []).map(sanitize)),
+      correctAnswer: sanitize(item.ans),
+      markingScheme: `1 Mark for choosing correct option.`,
+      explanation: 'Primary School Curriculum Standard.'
+    });
+  }
 
   // Handle Class 11
   if (subjectId.includes('-11')) {
@@ -192,7 +246,7 @@ function generateSubjectMcq(subjectId: string, idx: number, usedTexts: Set<strin
   const item = bank[pickIdx];
   usedTexts.add(item.q);
 
-  return {
+  return sanitizeQuestionOptions({
     id: `gen-${subjectId}-mcq-${ts}-${idx}`,
     subjectId,
     chapterId: 'ch1',
@@ -202,11 +256,11 @@ function generateSubjectMcq(subjectId: string, idx: number, usedTexts: Set<strin
     difficulty: 'medium',
     isCompetency: idx % 2 === 1,
     questionText: sanitize(item.q),
-    options: shuffleArray(item.opts.map(sanitize)),
+    options: shuffleArray((item.opts || []).map(sanitize)),
     correctAnswer: sanitize(item.ans),
     markingScheme: `1 Mark for choosing correct option (${item.ans.charAt(0)}).`,
     explanation: 'Official CBSE Board Marking Scheme Requirement.'
-  };
+  });
 }
 
 // GENERATOR ENGINE FOR VSAs (2 MARKS)
@@ -417,6 +471,256 @@ function getSubjectFallbackQuestion(
   usedTexts: Set<string>
 ): FallbackItem {
   const lower = (subjectId || '').toLowerCase();
+
+  // 0. PRIMARY GRADES STRICT ISOLATION GUARD (CLASSES 3, 4, 5)
+  if (lower.includes('class3') || lower.includes('c3-') || lower.includes('083-') || lower.includes('class4') || lower.includes('c4-') || lower.includes('084-') || lower.includes('class5') || lower.includes('c5-') || lower.includes('085-evs') || lower.includes('085-mth') || lower.includes('085-eng') || lower.includes('085-hin')) {
+    if (lower.includes('math')) {
+      if (type === 'vsa') {
+        const bank: FallbackItem[] = [
+          { q: "What is the expanded form of 478? Convert 3 meters into centimeters.", ans: "478 = 400 + 70 + 8. 3 meters = 300 centimeters (1m = 100cm).", ch: "Fun with Numbers" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'sa') {
+        const bank: FallbackItem[] = [
+          { q: "A shopkeeper has 150 apples and sells 65 in the morning. Calculate how many apples remain.", ans: "Remaining apples = 150 - 65 = 85 apples.", ch: "Give and Take" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'la') {
+        const bank: FallbackItem[] = [
+          { q: "A box contains 8 packets of crayons. If each packet has 6 crayons, find the total crayons using multiplication.", ans: "Total crayons = 8 × 6 = 48 crayons.", ch: "How Many Times?" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      const bank: FallbackItem[] = [
+        {
+          passage: "Aarav bought a notebook for ₹45, a pen for ₹25, and a eraser for ₹10. He paid a ₹100 note to shopkeeper.",
+          q: "Q1. Calculate total bill amount. (2M)\nQ2. How much change will Aarav get back? (2M)",
+          ans: "Q1. Bill = ₹45 + ₹25 + ₹10 = ₹80.\nQ2. Change = ₹100 - ₹80 = ₹20.",
+          ch: "Rupees and Paise"
+        }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+
+    if (lower.includes('eng')) {
+      if (type === 'vsa') {
+        const bank: FallbackItem[] = [
+          { q: "Identify Noun in: 'The dog barked'. Write opposite of 'Hot'.", ans: "Noun: Dog. Opposite of Hot: Cold.", ch: "Grammar & Vocabulary" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'sa') {
+        const bank: FallbackItem[] = [
+          { q: "Write 4 short sentences describing 'My School'.", ans: "My school name is Modern Public School. It has a big playground and clean classrooms. My teachers are very helpful. I love going to school daily.", ch: "Writing Skills" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'la') {
+        const bank: FallbackItem[] = [
+          { q: "Read passage: 'Tommy is a brown puppy. He plays with a red ball in garden.'\n(a) What is Tommy?\n(b) What color is he?\n(c) What does he play with?", ans: "(a) Tommy is a puppy. (b) Brown. (c) Red ball in garden.", ch: "Reading Comprehension" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      const bank: FallbackItem[] = [
+        {
+          passage: "One sunny morning, a yellow butterfly flew in Sonu's garden. Sonu saved the butterfly from a spider web.",
+          q: "Q1. What color was the butterfly? (1M)\nQ2. Where was it trapped? (1M)\nQ3. What moral do we learn? (2M)",
+          ans: "Q1. Yellow.\nQ2. In a spider web.\nQ3. Be kind to small animals and insects.",
+          ch: "The Yellow Butterfly"
+        }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+
+    if (lower.includes('hin')) {
+      if (type === 'vsa') {
+        const bank: FallbackItem[] = [
+          { q: "लिंग बदलो: (क) राजा - _____ (ख) मोर - _____।", ans: "(क) रानी (ख) मोरनी।", ch: "व्याकरण" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'sa') {
+        const bank: FallbackItem[] = [
+          { q: "‘मेरा प्रिय खिलौना’ पर 3 सरल वाक्य लिखिए।", ans: "मेरा प्रिय खिलौना एक कार है। इसका रंग लाल है। मैं शाम को इससे खेलता हूँ।", ch: "रचनात्मक लेखन" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'la') {
+        const bank: FallbackItem[] = [
+          { q: "‘कक्कू’ कविता के आधार पर बताइए कि कक्कू को सब क्यों चिढ़ाते थे?", ans: "क्योंकि कक्कू बात-बात में चिढ़ जाता था और दिन भर रोता रहता था।", ch: "रिमझिम: कक्कू" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      const bank: FallbackItem[] = [
+        {
+          passage: "एक पेड़ पर चिड़िया का घोंसला था। घोंसले में दो सुंदर अंडे थे। चिड़िया दिन भर दाना-पानी लाती थी।",
+          q: "Q1. चिड़िया का घोंसला कहाँ था? (1M)\nQ2. घोंसले में क्या था? (1M)\nQ3. चिड़िया दिन भर क्या करती थी? (2M)",
+          ans: "Q1. पेड़ पर। Q2. दो सुंदर अंडे। Q3. दाना-पानी लाती थी।",
+          ch: "अपठित बोध"
+        }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+
+    // Default EVS / Science for Class 3-5
+    if (type === 'vsa') {
+      const bank: FallbackItem[] = [
+        { q: "Name two natural sources of water and write one way to save water.", ans: "Sources: Rain, Rivers. Saving way: Turn off running tap while brushing.", ch: "Water O' Water!" }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+    if (type === 'sa') {
+      const bank: FallbackItem[] = [
+        { q: "Differentiate Kutcha house and Pucca house with materials used.", ans: "Kutcha house: Mud, straw, bamboo. Pucca house: Bricks, cement, iron.", ch: "Our Houses" }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+    if (type === 'la') {
+      const bank: FallbackItem[] = [
+        { q: "List three good habits to keep our home and school environment clean.", ans: "1. Throw garbage in dustbin. 2. Keep things organized. 3. Sweep and mop daily.", ch: "Clean Environment" }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+    const bank: FallbackItem[] = [
+      {
+        passage: "Peacocks have colorful feathers, ducks have webbed feet for swimming, and woodpeckers have sharp beaks.",
+        q: "Q1. Which bird is national bird of India? (1M)\nQ2. How do webbed feet help ducks? (1M)\nQ3. State two functions of feathers in birds. (2M)",
+        ans: "Q1. Peacock.\nQ2. Webbed feet help ducks swim in water.\nQ3. Keep birds warm and help them fly.",
+        ch: "Flying High"
+      }
+    ];
+    return pickItem(bank, idx, usedTexts);
+  }
+
+  // 0.5. MIDDLE SCHOOL GRADES STRICT ISOLATION GUARD (CLASSES 6, 7, 8)
+  if (lower.includes('class6') || lower.includes('c6-') || lower.includes('086-sci') || lower.includes('086-mth') || lower.includes('class7') || lower.includes('c7-') || lower.includes('087-sci') || lower.includes('087-mth') || lower.includes('class8') || lower.includes('c8-') || lower.includes('088-sci') || lower.includes('088-mth')) {
+    if (lower.includes('math')) {
+      if (type === 'vsa') {
+        const bank: FallbackItem[] = [
+          { q: "Solve the linear equation: 3x + 7 = 22. Find the value of x.", ans: "3x = 22 - 7 = 15 => x = 15 / 3 = 5.", ch: "Simple Equations" },
+          { q: "Calculate the area and perimeter of a rectangle with length 12 cm and breadth 8 cm.", ans: "Area = length × breadth = 12 × 8 = 96 cm². Perimeter = 2(12 + 8) = 40 cm.", ch: "Perimeter and Area" },
+          { q: "Express 3/5 as a percentage.", ans: "(3 / 5) × 100 = 60%.", ch: "Comparing Quantities" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'sa') {
+        const bank: FallbackItem[] = [
+          { q: "A shopkeeper bought an item for ₹500 and sold it for ₹625. Calculate the profit percentage.", ans: "Profit = ₹625 - ₹500 = ₹125. Profit % = (125 / 500) × 100 = 25%.", ch: "Comparing Quantities" },
+          { q: "Find the measure of each angle of an equilateral triangle and state the property used.", ans: "Each angle = 180° / 3 = 60°. Property: Sum of angles in a triangle is 180°.", ch: "The Triangle and its Properties" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'la') {
+        const bank: FallbackItem[] = [
+          { q: "Construct a bar graph for the following data of marks obtained by a student: Maths (80), Science (75), English (85), Hindi (70), Social Science (60). State which subject has the highest score.", ans: "Highest score is in English (85). Bar graph plotted with suitable scale (1 unit = 10 marks).", ch: "Data Handling" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      const bank: FallbackItem[] = [
+        {
+          passage: "Rohan invested ₹5,000 in a bank at a simple interest rate of 6% per annum for a duration of 3 years.",
+          q: "Q1. Calculate the total simple interest earned after 3 years. (2M)\nQ2. What is the total amount Rohan receives from the bank? (2M)",
+          ans: "Q1. Simple Interest = (P × R × T) / 100 = (5000 × 6 × 3) / 100 = ₹900.\nQ2. Amount = Principal + SI = ₹5,000 + ₹900 = ₹5,900.",
+          ch: "Comparing Quantities"
+        }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+
+    if (lower.includes('eng')) {
+      if (type === 'vsa') {
+        const bank: FallbackItem[] = [
+          { q: "Change the active sentence to passive voice: 'She writes a letter.'", ans: "Passive Voice: 'A letter is written by her.'", ch: "Grammar: Active and Passive Voice" },
+          { q: "Identify the Adverb in the sentence: 'The runner completed the race swiftly.'", ans: "Adverb: 'swiftly' (modifies the verb completed).", ch: "Parts of Speech" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'sa') {
+        const bank: FallbackItem[] = [
+          { q: "Write a short paragraph (60-80 words) on 'Importance of Daily Physical Exercise'.", ans: "Physical exercise keeps our body fit and mind active. It improves blood circulation, boosts immunity, and prevents diseases. Daily exercise builds discipline and healthy habits.", ch: "Paragraph Writing" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'la') {
+        const bank: FallbackItem[] = [
+          { q: "Write an informal letter to your friend inviting them to spend the summer vacation at your hometown.", ans: "Format includes Sender's Address, Date, Salutation, Body of letter with vacation details, and Sign-off.", ch: "Letter Writing" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      const bank: FallbackItem[] = [
+        {
+          passage: "Trees are vital for life on Earth. They absorb carbon dioxide, release oxygen, reduce soil erosion, and offer shelter to wildlife.",
+          q: "Q1. Why are trees considered vital for life? (1M)\nQ2. Which gas do trees absorb during photosynthesis? (1M)\nQ3. State two indirect benefits of trees mentioned in the text. (2M)",
+          ans: "Q1. They release oxygen and support ecosystem.\nQ2. Carbon Dioxide.\nQ3. Soil erosion reduction and providing shelter to wildlife.",
+          ch: "Reading Comprehension"
+        }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+
+    if (lower.includes('hin')) {
+      if (type === 'vsa') {
+        const bank: FallbackItem[] = [
+          { q: "‘अनुराग’ शब्द का विलोम शब्द तथा ‘सूर्योदय’ की संधि-विच्छेद लिखिए।", ans: "अनुराग का विलोम: विराग। सूर्योदय का संधि-विच्छेद: सूर्य + उदय।", ch: "व्याकरण" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'sa') {
+        const bank: FallbackItem[] = [
+          { q: "‘समय का महत्त्व’ विषय पर 50-60 शब्दों में एक संक्षिप्त अनुच्छेद लिखिए।", ans: "समय अत्यंत मूल्यवान है। बीता हुआ समय कभी वापस नहीं आता। सफलता पाने के लिए हमें हर कार्य समय पर करना चाहिए।", ch: "अनुच्छेद लेखन" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      if (type === 'la') {
+        const bank: FallbackItem[] = [
+          { q: "अपने विद्यालय के प्रधानाचार्य को तीन दिन के अवकाश हेतु एक औपचारिक प्रार्थना पत्र लिखिए।", ans: "सेवा में, श्रीमान प्रधानाचार्य जी... अवकाश हेतु प्रार्थना पत्र (उचित प्रारूप सहित)।", ch: "पत्र लेखन" }
+        ];
+        return pickItem(bank, idx, usedTexts);
+      }
+      const bank: FallbackItem[] = [
+        {
+          passage: "सच्चा मित्र वही है जो विपत्ति के समय काम आए। मित्र का चयन करते समय बहुत सावधानी रखनी चाहिए।",
+          q: "Q1. सच्चा मित्र किसे कहा गया है? (1M)\nQ2. मित्र चुनते समय क्या ध्यान रखना चाहिए? (1M)\nQ3. गद्यांश का उपयुक्त शीर्षक लिखिए। (2M)",
+          ans: "Q1. जो विपत्ति के समय काम आए। Q2. सावधानी रखनी चाहिए। Q3. सच्चा मित्र।",
+          ch: "अपठित गद्यांश"
+        }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+
+    // Default Science / Social Science for Class 6-8
+    if (type === 'vsa') {
+      const bank: FallbackItem[] = [
+        { q: "State the equation for Photosynthesis and name the green pigment required.", ans: "6CO₂ + 6H₂O --(Sunlight/Chlorophyll)--> C₆H₁₂O₆ + 6O₂. Pigment: Chlorophyll.", ch: "Nutrition in Plants" },
+        { q: "Distinguish between autotrophic and heterotrophic modes of nutrition with examples.", ans: "Autotrophs make own food (green plants). Heterotrophs depend on others for food (animals, humans).", ch: "Nutrition in Living Organisms" }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+    if (type === 'sa') {
+      const bank: FallbackItem[] = [
+        { q: "Explain the three main types of heat transfer (Conduction, Convection, Radiation) with suitable everyday examples.", ans: "Conduction: Heat through solids (metal spoon). Convection: Heat through fluids (boiling water). Radiation: Heat without medium (sunlight).", ch: "Heat" },
+        { q: "Describe the function of red blood cells, white blood cells, and platelets in human blood.", ans: "RBCs: Transport oxygen via hemoglobin. WBCs: Fight infections. Platelets: Help in blood clotting.", ch: "Transportation in Animals and Plants" }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+    if (type === 'la') {
+      const bank: FallbackItem[] = [
+        { q: "Draw a neat labeled diagram of the Human Digestive System and explain the role of stomach and small intestine in digestion.", ans: "Stomach secretes HCl and digestive juices to break down proteins. Small intestine receives bile and pancreatic juice for complete digestion and nutrient absorption.", ch: "Nutrition in Animals" }
+      ];
+      return pickItem(bank, idx, usedTexts);
+    }
+    const bank: FallbackItem[] = [
+      {
+        passage: "Light travels in a straight line. When light strikes a polished mirror surface, it undergoes reflection following the laws of reflection.",
+        q: "Q1. What is meant by reflection of light? (1M)\nQ2. State the two Laws of Reflection. (2M)\nQ3. Differentiate between real image and virtual image. (1M)",
+        ans: "Q1. Bouncing back of light when striking a surface.\nQ2. 1) Angle of incidence = Angle of reflection. 2) Incident ray, reflected ray, and normal lie in same plane.\nQ3. Real image can be caught on screen; Virtual image cannot.",
+        ch: "Light and Reflection"
+      }
+    ];
+    return pickItem(bank, idx, usedTexts);
+  }
 
   // 1. PHYSICS (042)
   if (lower.includes('phy') || lower.includes('042')) {
@@ -776,7 +1080,7 @@ function getSubjectFallbackQuestion(
   }
 
   // 12. COMPUTER SCIENCE (083) / IT (402)
-  if (lower.includes('cs') || lower.includes('computer') || lower.includes('083') || lower.includes('it-402') || lower.includes('402')) {
+  if (lower.includes('cs') || lower.includes('computer') || (lower.includes('083') && !lower.includes('evs') && !lower.includes('mth') && !lower.includes('eng') && !lower.includes('hin')) || lower.includes('it-402') || (lower.includes('402') && !lower.includes('evs'))) {
     if (type === 'vsa') {
       const bank: FallbackItem[] = [
         { q: "Differentiate between r+ and w+ file opening modes in Python.", ans: "r+: Opens existing file for reading & writing without truncating.\nw+: Opens file for reading & writing, truncates existing file to 0 bytes.", ch: "File Handling in Python" },

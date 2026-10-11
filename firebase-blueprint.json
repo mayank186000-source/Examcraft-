@@ -36,6 +36,23 @@
         "role": { "type": "string" },
         "createdAt": { "type": "string" }
       }
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "User feedback, bug reports, and suggestions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rating": { "type": "number" },
+        "category": { "type": "string" },
+        "message": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "classLevel": { "type": "string" },
+        "subject": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -50,6 +67,10 @@
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile records"
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "User feedbacks and suggestions"
     }
   }
 }

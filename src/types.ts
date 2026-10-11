@@ -56,6 +56,31 @@ export interface Question {
   casePassageHindi?: string;
 }
 
+export interface CustomBlueprintSection {
+  id: string;
+  name: string;
+  description?: string;
+  questionType: QuestionType;
+  questionCount: number;
+  marksPerQuestion: number;
+  hasChoice?: boolean;
+}
+
+export interface CustomBlueprint {
+  enabled: boolean;
+  title?: string;
+  totalMarks: number;
+  timeMinutes: number;
+  sections: CustomBlueprintSection[];
+}
+
+export interface JuniorCustomPrompt {
+  enabled: boolean;
+  writingPrompt?: string;
+  grammarPrompt?: string;
+  confirmedQuestions?: Question[];
+}
+
 export interface PaperConfig {
   subjectId: string;
   preset: TestPreset;
@@ -78,6 +103,8 @@ export interface PaperConfig {
   includeSolutions: boolean;
   useAI: boolean;
   language?: 'en' | 'hi' | 'bilingual';
+  customBlueprint?: CustomBlueprint;
+  juniorCustomPrompt?: JuniorCustomPrompt;
 }
 
 export interface PaperSection {

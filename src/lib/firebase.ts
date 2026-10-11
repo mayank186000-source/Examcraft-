@@ -1,21 +1,24 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-let firestoreDb;
-try {
-  firestoreDb = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
-  }, firebaseConfig.firestoreDatabaseId);
-} catch (e) {
-  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-}
-
-export const db = firestoreDb;
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
+// Test connection on boot gracefully without crashing
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Firestore offline connection check:', error.message);
+    }
+  }
+}
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',
@@ -54,13 +57,3 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Test connection on boot gracefully
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    // Catch gracefully without throwing unhandled promise rejection
-    console.log("Firestore initial connection check completed.");
-  }
-}
-testConnection();

@@ -1201,7 +1201,8 @@ export function generateCombinatorialPaperFromVault(config: PaperConfig): Genera
           q.casePassage = "Sustainable development requires balancing economic progress with environmental preservation. Groundwater in India is under serious threat of overuse in many parts of the country. About 300 districts have reported a water level decline of over 4 meters during the past 20 years. Nearly one-third of the country is overusing its groundwater reserves, particularly in agriculturally prosperous regions of Punjab and Western UP.";
           q.diagramDescription = "Groundwater level decline bar chart showing normal levels vs 4m decline in Punjab and Western Uttar Pradesh over 20 years.";
         } else {
-          q.casePassage = "Read the case scenario / experimental setup described below carefully to answer the following sub-questions.";
+          const chLabel = q.chapterName || 'Syllabus Core Unit';
+          q.casePassage = `Based on a comprehensive case study of ${chLabel}: A real-world experimental scenario and observational dataset were recorded during classroom field studies. Analyze the principles of ${chLabel} to answer the following integrated sub-questions.`;
         }
       }
     }
@@ -1312,14 +1313,22 @@ export function getClassFromSubjectId(subjectId: string, subjectName?: string): 
   const s = (subjectId || '').toLowerCase();
   const n = (subjectName || '').toLowerCase();
 
+  // Primary codes explicit check FIRST
+  if (s.includes('class3') || s.includes('c3-') || s.includes('083-evs') || s.includes('083-mth') || s.includes('083-eng') || s.includes('083-hin') || s.includes('3rd') || n.includes('class 3') || n.includes('3rd')) return 3;
+  if (s.includes('class4') || s.includes('c4-') || s.includes('084-evs') || s.includes('084-mth') || s.includes('084-eng') || s.includes('084-hin') || s.includes('4th') || n.includes('class 4') || n.includes('4th')) return 4;
+  if (s.includes('class5') || s.includes('c5-') || s.includes('085-evs') || s.includes('085-mth') || s.includes('085-eng') || s.includes('085-hin') || s.includes('5th') || n.includes('class 5') || n.includes('5th')) return 5;
+  if (s.includes('class6') || s.includes('c6-') || s.includes('086-sci') || s.includes('086-mth') || s.includes('6th') || n.includes('class 6') || n.includes('6th')) return 6;
+  if (s.includes('class7') || s.includes('c7-') || s.includes('087-sci') || s.includes('087-mth') || s.includes('7th') || n.includes('class 7') || n.includes('7th')) return 7;
+  if (s.includes('class8') || s.includes('c8-') || s.includes('088-sci') || s.includes('088-mth') || s.includes('8th') || n.includes('class 8') || n.includes('8th')) return 8;
+
   if (s.includes('class12') || s.includes('c12') || s.includes('12th') || n.includes('class 12') || n.includes('12th')) return 12;
   if (s.includes('class11') || s.includes('c11') || s.includes('11th') || s.endsWith('-11') || n.includes('class 11') || n.includes('11th')) return 11;
+  if (s.includes('class10') || s.includes('c10') || s.includes('10th') || n.includes('class 10') || n.includes('10th')) return 10;
   if (s.includes('class9') || s.includes('c9') || s.includes('9th') || n.includes('class 9') || n.includes('9th')) return 9;
 
   if (s === 'physics-042' || s === 'chemistry-043' || s === 'english-301' || s === 'maths-041-11' || s === 'biology-044-11' || s === 'cs-083-11' || s === 'hindi-302-11' || s === 'accountancy-055-11' || s === 'bst-054-11' || s === 'eco-030-11' || s === 'history-027-11' || s === 'polsci-028-11' || s === 'geography-029-11' || s === 'sociology-039-11') return 11;
 
   if (s === 'science-086' || s === 'maths-041' || s === 'social-087' || s === 'english-184' || s === 'it-402' || s === 'hindi-002' || s === 'hindi-085') return 10;
-  if (s.includes('class10') || s.includes('c10') || s.includes('10th') || n.includes('class 10') || n.includes('10th')) return 10;
 
   return 10;
 }
@@ -1328,6 +1337,7 @@ export function getSubjectDomain(subjectId: string, subjectName?: string): strin
   const s = (subjectId || '').toLowerCase();
   const n = (subjectName || '').toLowerCase();
 
+  if (s.includes('evs') || n.includes('evs') || n.includes('environmental')) return 'science';
   if (s.includes('chem') || s.includes('043') || n.includes('chemistry')) return 'chemistry';
   if (s.includes('phy') || s.includes('042') || n.includes('physics')) return 'physics';
   if (s.includes('bio') || s.includes('044') || n.includes('biology')) return 'biology';
@@ -1343,7 +1353,7 @@ export function getSubjectDomain(subjectId: string, subjectName?: string): strin
   if (s.includes('social') || s.includes('087') || s.includes('sst') || n.includes('social')) return 'social';
   if (s.includes('eng') || s.includes('184') || s.includes('301') || n.includes('english')) return 'english';
   if (s.includes('hin') || s.includes('002') || s.includes('085') || s.includes('302') || n.includes('hindi')) return 'hindi';
-  if (s.includes('cs') || s.includes('it') || s.includes('402') || s.includes('083') || n.includes('computer') || n.includes('information')) return 'cs';
+  if (s.includes('cs') || s.includes('computer') || s.includes('it-402') || (s.includes('083') && !s.includes('evs') && !s.includes('mth') && !s.includes('eng') && !s.includes('hin')) || n.includes('computer') || n.includes('information')) return 'cs';
 
   return 'other';
 }
@@ -1357,6 +1367,7 @@ export function isSubjectAndClassMatch(
   if (!qText || qText.trim().length === 0) return false;
 
   const targetDomain = getSubjectDomain(paperSubjectId, paperSubjectName);
+  const targetClass = getClassFromSubjectId(paperSubjectId, paperSubjectName);
   const hasDevanagari = /[\u0900-\u097F]/.test(qText);
 
   // 1. Language Guard
@@ -1364,7 +1375,6 @@ export function isSubjectAndClassMatch(
   if (targetDomain !== 'hindi' && hasDevanagari) return false;
 
   // 2. Class Level Guard
-  const targetClass = getClassFromSubjectId(paperSubjectId, paperSubjectName);
   if (qSubjectId) {
     const qClass = getClassFromSubjectId(qSubjectId);
     if (targetClass !== qClass) return false;
@@ -1374,25 +1384,31 @@ export function isSubjectAndClassMatch(
   if (qSubjectId) {
     const qDomain = getSubjectDomain(qSubjectId);
     if (targetDomain === 'science' && (qDomain === 'science' || qDomain === 'physics' || qDomain === 'chemistry' || qDomain === 'biology')) {
-      // General Science in Class 9/10 encompasses physics/chem/bio
+      // General Science encompasses physics/chem/bio
     } else if (targetDomain === 'social' && (qDomain === 'social' || qDomain === 'history' || qDomain === 'polsci' || qDomain === 'geography' || qDomain === 'economics')) {
-      // General Social Science in Class 9/10 encompasses history/polsci/geo/eco
+      // General Social Science encompasses history/polsci/geo/eco
     } else if (targetDomain !== qDomain) {
       return false;
     }
   }
 
-  // 4. Keyword verification against cross-domain pollution
+  // 4. Keyword verification against cross-domain and cross-grade pollution
   const textLower = qText.toLowerCase();
 
-  const englishPatterns = /lencho|nelson mandela|valli|bholi|tricki|horace|griffin|pumphrey|wanda|custard the dragon|anne frank|rajvir|pranjol|matilda|ebright|kisa gotami|lomo|natalya|chubukov|coorg|mijbil|kezia|glennie|bismillah|sharapova|margie|tommy|subbu|sophie|jansie|crofter|peddler|ironmaster|saheb|mukesh|douglas|franz|m\. hamel|poet|poem|stanza|metaphor|alliteration|personification|rhyme scheme|literary device|figure of speech|analytical paragraph|reported speech|direct speech|indirect speech|passive voice|modal verb|subject-verb|letter to editor|letter of complaint|notice writing|report writing|read the following passage|read the extract|first flight|footprints without feet|beehive|moments|flamingo|vistas/i;
+  const highSchoolLit = /lencho|nelson mandela|valli|bholi|tricki|horace|griffin|pumphrey|wanda|custard the dragon|anne frank|rajvir|pranjol|matilda|ebright|kisa gotami|lomo|natalya|chubukov|oxen meadows|chekhov|maupassant|coorg|mijbil|kezia|glennie|bismillah|sharapova|margie|tommy|subbu|sophie|jansie|crofter|peddler|ironmaster|saheb|mukesh|douglas|franz|m\. hamel|first flight|footprints without feet|beehive|moments|flamingo|vistas/i;
 
+  // Primary & Middle Class Strict Isolation (Class 1 to 8 MUST NOT have Class 9-12 literature or advanced board concepts)
+  if (targetClass <= 8) {
+    if (highSchoolLit.test(textLower)) return false;
+    if (/trigonometry|quadratic|polynomial|discriminant|catenation|saponification|exothermic|joule's law|bismarck|purna swaraj|ohm's law|lenz's law|gauss's law|electrolysis|isomerism|esterification|clemmensen|aldol|sn1|sn2|galvanometer|solenoid|myopia|hypermetropia|presbyopia|sin θ|cos θ|tan θ|cosec|sec θ|cot θ/i.test(textLower)) {
+      return false;
+    }
+  }
+
+  const englishPatterns = highSchoolLit;
   const sciencePatterns = /lead nitrate|potassium iodide|exothermic|endothermic|convex lens|concave mirror|focal length|ohm's law|resistor|ammeter|voltmeter|kilowatt|catenation|saponification|esterification|alkyne|alkane|iupac|chemical reaction|decomposition|bleaching powder|refraction|dispersion|solenoid|tropisms|nephron|reflex arc|tropic level|cfcs|dioptre|photosynthesis|mitochondria|xylem|phloem|lysosome|chloroplast|stigma|ovary|sperm|dna replication|newton's|gravitation|acid|base|salt|element|compound|valency|electron|proton|neutron|periodic table|displacement reaction|combustion|oxidation|reduction|ph value|ph scale|litmus|neutralisation|corrosion|rancidity|carbonate|bicarbonate|hydroxide|hydrochloric|sulphuric|nitric|alkali|metal|non-metal|calcination|roasting|electrolysis|thermite|homologous series|isomer|functional group|ethanol|ethanoic|covalent|ionic bond|myopia|hypermetropia|presbyopia|refractive index|scattering of light|tyndall|spectrum|resistance|resistivity|parallel circuit|series circuit|joule's law|fuse|electric current|potential difference|magnetic field|fleming's|right hand thumb|electromagnet|galvanometer|electric motor|generator|induction|digestive system|pepsin|trypsin|bile|villi|transpiration|stomata|translocation|aorta|capillary|dialysis|excretion|neuron|synapse|cerebrum|cerebellum|medulla|reflex action|auxin|gibberellin|cytokinin|abscisic|thyroxine|insulin|adrenaline|testosterone|estrogen|pituitary|asexual|binary fission|budding|fragmentation|regeneration|spore formation|vegetative propagation|pollination|embryo|placenta|menstruation|contraceptive|monohybrid|dihybrid|genotype|phenotype|dominant allele|recessive|sex determination|autosome|homologous organ|analogous organ|fossils|ozone layer|biological magnification|biodegradable|garbage management/i;
-
   const socialPatterns = /kaiser william|bismarck|regur soil|vernacular press|sinhala|concurrent list|tertiary sector|reserve bank|treaty of vienna|purna swaraj|rowlatt act|multinational corporation|unification of germany|power sharing|federalism|non-cooperation|civil code|napoleonic|babu ramchandra/i;
-
   const commercePatterns = /journal entry|balance sheet|working capital|demat|debit|credit|goodwill|partnership deed|trial balance|ledger account|shares issued|debentures|sebi/i;
-
   const mathPatterns = /hcf|lcm|quadratic|polynomial|discriminant|arithmetic progression|ap term|zeros of|trigonometry|sin θ|sin\(|cos θ|cos\(|tan θ|tan\(|cosec|sec θ|cot θ|hypotenuse|pythagoras|angle of elevation|angle of depression|area of sector|curved surface area|empirical relationship|coprime|section formula|distance formula|modal class|common difference|probability|frequency distribution|histogram|ogive/i;
 
   if (targetDomain === 'math') {
@@ -1414,29 +1430,147 @@ export function isSubjectAndClassMatch(
 // AUTHENTIC FALLBACK QUESTION GENERATOR
 // Ensures 0% generic strings, no [Variant] prefixes, and subject-appropriate CBSE text
 // ---------------------------------------------------------------------------
-export function createAuthenticFallbackQuestion(subject: Subject | any, targetMarks: number, qIdx: number, usedHashes?: Set<string>): Question {
+export function createAuthenticFallbackQuestion(
+  subject: Subject | any,
+  targetMarks: number,
+  qIdx: number,
+  usedHashes?: Set<string>,
+  selectedChapterTitles?: string[]
+): Question {
   const sId = (subject.id || '').toLowerCase();
   const sName = (subject.name || '').toLowerCase();
   const domain = getSubjectDomain(sId, sName);
+  const targetClass = getClassFromSubjectId(sId, sName);
   const pId = `auth-pad-${sId}-${targetMarks}m-${qIdx}-${Date.now()}`;
   
   const chObj = subject.chapters?.[qIdx % (subject.chapters?.length || 1)];
-  const chName = chObj?.title || chObj?.name || 'Core Syllabus Unit';
+  const fallbackChName = (selectedChapterTitles && selectedChapterTitles.length > 0)
+    ? selectedChapterTitles[qIdx % selectedChapterTitles.length]
+    : (chObj?.title || chObj?.name || 'Core Syllabus Unit');
+
+  const hasSelectedChapters = Boolean(selectedChapterTitles && selectedChapterTitles.length > 0);
+  const selectedCleanTitles = (selectedChapterTitles || []).map(t => t.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+  const isChapterTitleMatch = (chStr: string) => {
+    if (!hasSelectedChapters) return true;
+    if (!chStr) return false;
+    const cleanCh = chStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const st of selectedCleanTitles) {
+      if (st.length > 2 && (cleanCh.includes(st) || st.includes(cleanCh))) return true;
+    }
+    return false;
+  };
 
   // Helper to select an unused question from a bank, or generate a unique variant
   const pickUnusedFromBank = (bank: { q: string; opts?: string[]; ans: string; ch: string; passage?: string }[]) => {
+    let eligible = bank;
+    if (hasSelectedChapters) {
+      const matchFilter = bank.filter(item => isChapterTitleMatch(item.ch || ''));
+      if (matchFilter.length > 0) {
+        eligible = matchFilter;
+      }
+    }
+
     if (usedHashes && usedHashes.size > 0) {
-      const unused = bank.find(item => !usedHashes.has(hashQuestionText(item.q)));
+      const unused = eligible.find(item => !usedHashes.has(hashQuestionText(item.q)));
       if (unused) return unused;
     }
     // Fallback: cycle through bank and append a subtle variation tag to guarantee unique text hash
-    const base = bank[qIdx % bank.length];
-    const suffix = qIdx >= bank.length ? `\n[Case Analysis #${qIdx + 1}]` : '';
+    const base = eligible[qIdx % eligible.length];
+    const suffix = qIdx >= eligible.length ? `\n[Case Analysis #${qIdx + 1}]` : '';
     return {
       ...base,
       q: `${base.q}${suffix}`
     };
   };
+
+  // ---------------------------------------------------------------------------
+  // PRIMARY SCHOOL FALLBACK (CLASSES 1 to 5)
+  // Strictly age-appropriate, elementary questions; 0% high-school literature
+  // ---------------------------------------------------------------------------
+  if (targetClass <= 5) {
+    if (domain === 'english') {
+      if (targetMarks === 1) {
+        const pEngMcq = [
+          { q: "Which word is the opposite of 'BIG'?", opts: ["A) Small", "B) Tall", "C) Large", "D) Fast"], ans: "A) Small", ch: "Opposites" },
+          { q: "Identify the Noun in the sentence: 'The cat sleeps on the mat.'", opts: ["A) Cat", "B) Sleeps", "C) On", "D) Soft"], ans: "A) Cat", ch: "Nouns" },
+          { q: "Which of these is the correct plural form of 'Box'?", opts: ["A) Boxes", "B) Boxs", "C) Boxen", "D) Boxies"], ans: "A) Boxes", ch: "Plurals" },
+          { q: "Choose the rhyming word for 'PEN':", opts: ["A) Hen", "B) Dog", "C) Sun", "D) Cup"], ans: "A) Hen", ch: "Rhyming Words" },
+          { q: "Fill in the correct article: 'I ate _____ apple for breakfast.'", opts: ["A) an", "B) a", "C) the", "D) no article"], ans: "A) an", ch: "Articles" },
+          { q: "Select the action word (Verb): 'Rohan runs in the playground.'", opts: ["A) Runs", "B) Rohan", "C) Playground", "D) In"], ans: "A) Runs", ch: "Verbs" }
+        ];
+        const sel = pEngMcq[qIdx % pEngMcq.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'peng-mcq', chapterName: sel.ch, type: 'mcq', marks: 1, difficulty: 'easy', isCompetency: false, questionText: sel.q, options: sel.opts, correctAnswer: sel.ans, markingScheme: "[1 Mark] Correct option." };
+      } else {
+        const pEngText = [
+          { q: "Read the short passage and answer the questions:\n'Little Meera has a white rabbit named Snowball. Snowball loves to eat fresh green carrots and hop around the garden.'\n1. What is the rabbit's name?\n2. What does Snowball love to eat?", ans: "1. The rabbit's name is Snowball.\n2. Snowball loves to eat fresh green carrots.", ch: "Reading Comprehension" },
+          { q: "Write four sentences about 'My School' using simple and clean grammar.", ans: "1. The name of my school is Delhi Public School.\n2. My school has a big playground and a library.\n3. All my teachers are very kind and helpful.\n4. I love going to school every day.", ch: "Short Paragraph Writing" },
+          { q: "Correct the punctuation and capital letters in the following sentences:\n1. my friend live in jaipur\n2. where is your water bottle", ans: "1. My friend lives in Jaipur.\n2. Where is your water bottle?", ch: "Punctuation" }
+        ];
+        const sel = pEngText[qIdx % pEngText.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'peng-text', chapterName: sel.ch, type: targetMarks === 2 ? 'vsa' : targetMarks === 3 ? 'sa' : 'la', marks: targetMarks, difficulty: 'easy', isCompetency: false, questionText: sel.q, correctAnswer: sel.ans, markingScheme: `[${targetMarks} Marks] Full credit for grammatically correct answer.` };
+      }
+    }
+
+    if (domain === 'hindi') {
+      if (targetMarks === 1) {
+        const pHinMcq = [
+          { q: "'दिन' शब्द का सही विलोम शब्द चुनिए:", opts: ["A) रात", "B) सुबह", "C) शाम", "D) दोपहर"], ans: "A) रात", ch: "विलोम शब्द" },
+          { q: "निम्नलिखित में से संज्ञा शब्द छाँटिए:", opts: ["A) पुस्तक", "B) पढ़ना", "C) सुंदर", "D) धीरे"], ans: "A) पुस्तक", ch: "संज्ञा" },
+          { q: "'लड़का' शब्द का बहुवचन क्या होगा?", opts: ["A) लड़के", "B) लड़कों", "C) लड़कियाँ", "D) लड़काएँ"], ans: "A) लड़के", ch: "वचन बदलें" },
+          { q: "इनमें से कौन सा शब्द सही वर्तनी (शुद्ध रूप) वाला है?", opts: ["A) फूल", "B) फुल", "C) फूल्ल", "D) फ़ूल"], ans: "A) फूल", ch: "शुद्ध वर्तनी" }
+        ];
+        const sel = pHinMcq[qIdx % pHinMcq.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'phin-mcq', chapterName: sel.ch, type: 'mcq', marks: 1, difficulty: 'easy', isCompetency: false, questionText: sel.q, options: sel.opts, correctAnswer: sel.ans, markingScheme: "[1 अंक] सही उत्तर पर 1 अंक।" };
+      } else {
+        const pHinText = [
+          { q: "दिए गए गद्यांश को पढ़कर प्रश्नों के उत्तर दीजिए:\n'राघव के पास एक पालतू कुत्ता है जिसका नाम मोती है। मोती बहुत समझदार है और गेंद से खेलना पसंद करता है।'\nप्रश्न 1: राघव के पालतू कुत्ते का क्या नाम है?\nप्रश्न 2: मोती को किस चीज़ से खेलना पसंद है?", ans: "उत्तर 1: राघव के पालतू कुत्ते का नाम मोती है।\nउत्तर 2: मोती को गेंद से खेलना पसंद है।", ch: "अपठित गद्यांश" },
+          { q: "अपने पसंदीदा त्यौहार 'दिवाली' पर तीन पंक्तियाँ लिखिए।", ans: "1. दिवाली रोशनी का त्यौहार है।\n2. इस दिन हम नए कपड़े पहनते हैं और दीये जलाते हैं।\n3. हम आपस में मिठाइयाँ बाँटते हैं।", ch: "अनुच्छेद लेखन" }
+        ];
+        const sel = pHinText[qIdx % pHinText.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'phin-text', chapterName: sel.ch, type: targetMarks === 2 ? 'vsa' : targetMarks === 3 ? 'sa' : 'la', marks: targetMarks, difficulty: 'easy', isCompetency: false, questionText: sel.q, correctAnswer: sel.ans, markingScheme: `[${targetMarks} अंक] सही उत्तर एवं भाषा की शुद्धता पर पूर्ण अंक।` };
+      }
+    }
+
+    if (domain === 'math') {
+      if (targetMarks === 1) {
+        const pMathMcq = [
+          { q: "What is 45 + 38?", opts: ["A) 83", "B) 73", "C) 81", "D) 85"], ans: "A) 83", ch: "Addition" },
+          { q: "What is 12 × 5?", opts: ["A) 60", "B) 50", "C) 65", "D) 55"], ans: "A) 60", ch: "Multiplication" },
+          { q: "How many sides does a Triangle have?", opts: ["A) 3", "B) 4", "C) 5", "D) 6"], ans: "A) 3", ch: "Basic Shapes" },
+          { q: "What is the place value of 7 in the number 572?", opts: ["A) 70 (Tens)", "B) 700 (Hundreds)", "C) 7 (Ones)", "D) 7000"], ans: "A) 70 (Tens)", ch: "Place Value" }
+        ];
+        const sel = pMathMcq[qIdx % pMathMcq.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'pmath-mcq', chapterName: sel.ch, type: 'mcq', marks: 1, difficulty: 'easy', isCompetency: false, questionText: sel.q, options: sel.opts, correctAnswer: sel.ans, markingScheme: "[1 Mark] Correct option." };
+      } else {
+        const pMathText = [
+          { q: "A shopkeeper had 150 apples. He sold 65 apples in the morning. How many apples are left with him?", ans: "Total apples = 150\nApples sold = 65\nApples left = 150 - 65 = 85 apples.", ch: "Word Problems - Subtraction" },
+          { q: "Riya bought 4 notebooks for ₹25 each. How much total money did she spend?", ans: "Cost of 1 notebook = ₹25\nCost of 4 notebooks = 25 × 4 = ₹100.", ch: "Word Problems - Multiplication" }
+        ];
+        const sel = pMathText[qIdx % pMathText.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'pmath-text', chapterName: sel.ch, type: targetMarks === 2 ? 'vsa' : targetMarks === 3 ? 'sa' : 'la', marks: targetMarks, difficulty: 'easy', isCompetency: false, questionText: sel.q, correctAnswer: sel.ans, markingScheme: `[${targetMarks} Marks] Full marks for correct calculation and steps.` };
+      }
+    }
+
+    if (domain === 'science' || domain === 'social' || domain === 'other') {
+      if (targetMarks === 1) {
+        const pEvsMcq = [
+          { q: "Which part of the plant absorbs water and minerals from the soil?", opts: ["A) Roots", "B) Leaves", "C) Flower", "D) Stem"], ans: "A) Roots", ch: "Plants Around Us" },
+          { q: "Which gas do human beings breathe in for survival?", opts: ["A) Oxygen", "B) Carbon Dioxide", "C) Nitrogen", "D) Helium"], ans: "A) Oxygen", ch: "Air & Living Things" },
+          { q: "How many hours are there in one complete day?", opts: ["A) 24 hours", "B) 12 hours", "C) 48 hours", "D) 30 hours"], ans: "A) 24 hours", ch: "Time & Seasons" }
+        ];
+        const sel = pEvsMcq[qIdx % pEvsMcq.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'pevs-mcq', chapterName: sel.ch, type: 'mcq', marks: 1, difficulty: 'easy', isCompetency: false, questionText: sel.q, options: sel.opts, correctAnswer: sel.ans, markingScheme: "[1 Mark] Correct option." };
+      } else {
+        const pEvsText = [
+          { q: "Name three basic human needs required for survival.", ans: "1. Food\n2. Water\n3. Shelter (House)", ch: "Basic Needs" },
+          { q: "Explain two simple habits to keep our body clean and healthy.", ans: "1. Brush teeth twice daily.\n2. Wash hands with soap before and after eating food.", ch: "Good Habits & Health" }
+        ];
+        const sel = pEvsText[qIdx % pEvsText.length];
+        return { id: pId, subjectId: subject.id, chapterId: 'pevs-text', chapterName: sel.ch, type: targetMarks === 2 ? 'vsa' : targetMarks === 3 ? 'sa' : 'la', marks: targetMarks, difficulty: 'easy', isCompetency: false, questionText: sel.q, correctAnswer: sel.ans, markingScheme: `[${targetMarks} Marks] Full marks for correct factual points.` };
+      }
+    }
+  }
 
   // 1. HINDI
   if (domain === 'hindi') {
@@ -1726,7 +1860,7 @@ export function createAuthenticFallbackQuestion(subject: Subject | any, targetMa
   }
 
   // DEFAULT ACADEMIC FALLBACK
-  return {
+  return sanitizeQuestionOptions({
     id: pId, subjectId: subject.id, chapterId: 'ch1', chapterName: chName,
     type: targetMarks === 1 ? 'mcq' : targetMarks === 2 ? 'vsa' : targetMarks === 3 ? 'sa' : targetMarks === 4 ? 'case' : 'la',
     marks: targetMarks, difficulty: 'medium', isCompetency: true,
@@ -1738,7 +1872,7 @@ export function createAuthenticFallbackQuestion(subject: Subject | any, targetMa
     options: targetMarks === 1 ? ["A) Core standard principle & statutory definition", "B) Arbitrary assumption", "C) Non-standard derivative", "D) Zero-value constant"] : undefined,
     correctAnswer: `Point-wise structured explanation covering core definitions, key principles, and practical applications of ${chName}.`,
     markingScheme: `[${targetMarks} Mark(s)] Full credit awarded for structured factual answer.`
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1907,7 +2041,7 @@ export function getRefreshedQuestion(
     }
 
     if (targetMarks === 1) {
-      return {
+      return sanitizeQuestionOptions({
         id: newId,
         subjectId: matchedSubject.id,
         chapterId: oldQ?.chapterId || 'ch1',
@@ -1917,10 +2051,10 @@ export function getRefreshedQuestion(
         difficulty: oldQ?.difficulty || 'medium',
         isCompetency: true,
         questionText: qText,
-        options: qOpts && qOpts.length >= 2 ? qOpts : ["A) Option A", "B) Option B", "C) Option C", "D) Option D"],
-        correctAnswer: qAns || "A) Option A",
+        options: qOpts,
+        correctAnswer: qAns || "A) Correct Option",
         markingScheme: qMs || "[1 Mark] Correct option selected."
-      };
+      });
     }
 
     return {
@@ -2067,6 +2201,31 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
     }
   });
 
+  // Chapter filter backup pool if specific chapters were selected in paper config
+  const selectedChapterIds = paper.config?.selectedChapterIds || [];
+  const chSet = new Set(selectedChapterIds);
+  const selectedChObjs = (subject.chapters || []).filter(c => chSet.has(c.id));
+  const selectedChapterTitles = selectedChObjs.map(c => c.title);
+  const selectedTitlesSet = new Set(selectedChapterTitles.map(t => t.toLowerCase().replace(/[^a-z0-9]/g, '')));
+
+  const isChapterMatch = (chName: string, id: string) => {
+    if (chSet.size === 0) return true;
+    if (chSet.has(id)) return true;
+    if (!chName || selectedTitlesSet.size === 0) return false;
+    const clean = chName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const st of selectedTitlesSet) {
+      if (st.length > 3 && (clean.includes(st) || st.includes(clean))) return true;
+    }
+    return false;
+  };
+
+  if (chSet.size > 0) {
+    const chapterFiltered = backupPool.filter(q => isChapterMatch(q.chapterName || '', q.chapterId || ''));
+    if (chapterFiltered.length > 0) {
+      backupPool = chapterFiltered;
+    }
+  }
+
   // Shuffle backup pool to ensure random selection of questions when padding or deduplicating
   const shuffledBackupPool = shuffle(backupPool);
 
@@ -2098,7 +2257,11 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
 
     // If section has too few questions, pad it up to expectedCount
     while (currentQuestions.length < expectedCount) {
-      const match = shuffledBackupPool.find(bq => Math.abs((bq.marks || 1) - targetMarks) <= 1 && !seenHashes.has(hashQuestionText(bq.questionText)));
+      const match = shuffledBackupPool.find(bq => 
+        Math.abs((bq.marks || 1) - targetMarks) <= 1 && 
+        isSubjectAndClassMatch(subject.id, subject.name, bq.subjectId, bq.questionText) &&
+        !seenHashes.has(hashQuestionText(bq.questionText))
+      );
       if (match) {
         seenHashes.add(hashQuestionText(match.questionText));
         currentQuestions.push({
@@ -2108,7 +2271,7 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
         });
       } else {
         // Fallback procedural question if backup pool exhausted
-        const authenticPad = createAuthenticFallbackQuestion(subject, targetMarks, currentQuestions.length, seenHashes);
+        const authenticPad = createAuthenticFallbackQuestion(subject, targetMarks, currentQuestions.length, seenHashes, selectedChapterTitles);
         seenHashes.add(hashQuestionText(authenticPad.questionText));
         if (authenticPad.assetId) seenAssetIds.add(authenticPad.assetId);
         currentQuestions.push(authenticPad);
@@ -2118,12 +2281,15 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
     const sanitizedQuestions = currentQuestions.map((qRaw, qIdx) => {
       const q = ensureQuestionAssetId(qRaw);
 
-      if (!q.questionText || q.questionText.trim().length < 5 || q.questionText.includes('[Variant') || q.questionText.includes('Solve the following standard problem')) {
+      const isValidClassMatch = isSubjectAndClassMatch(subject.id, subject.name, q.subjectId, q.questionText);
+
+      if (!isValidClassMatch || !q.questionText || q.questionText.trim().length < 5 || q.questionText.includes('[Variant') || q.questionText.includes('Solve the following standard problem')) {
         const matchRaw = shuffledBackupPool.find(bq => {
           const bqWithAsset = ensureQuestionAssetId(bq);
           const hMatch = !seenHashes.has(hashQuestionText(bqWithAsset.questionText));
           const aMatch = !bqWithAsset.assetId || !seenAssetIds.has(bqWithAsset.assetId);
-          return hMatch && aMatch;
+          const cMatch = isSubjectAndClassMatch(subject.id, subject.name, bq.subjectId, bq.questionText);
+          return hMatch && aMatch && cMatch;
         });
         if (matchRaw) {
           const match = ensureQuestionAssetId(matchRaw);
@@ -2131,7 +2297,7 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
           if (match.assetId) seenAssetIds.add(match.assetId);
           return { ...match, id: `rep-${secIdx}-${qIdx}-${Date.now()}` };
         } else {
-          const authRep = ensureQuestionAssetId(createAuthenticFallbackQuestion(subject, q.marks || targetMarks, qIdx, seenHashes));
+          const authRep = ensureQuestionAssetId(createAuthenticFallbackQuestion(subject, q.marks || targetMarks, qIdx, seenHashes, selectedChapterTitles));
           seenHashes.add(hashQuestionText(authRep.questionText));
           if (authRep.assetId) seenAssetIds.add(authRep.assetId);
           return authRep;
@@ -2152,7 +2318,8 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
         const bqWithAsset = ensureQuestionAssetId(bq);
         const hMatch = !seenHashes.has(hashQuestionText(bqWithAsset.questionText));
         const aMatch = !bqWithAsset.assetId || !seenAssetIds.has(bqWithAsset.assetId);
-        return hMatch && aMatch;
+        const cMatch = isSubjectAndClassMatch(subject.id, subject.name, bq.subjectId, bq.questionText);
+        return hMatch && aMatch && cMatch;
       });
 
       if (matchRaw) {
@@ -2165,7 +2332,7 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
           marks: q.marks || targetMarks
         };
       } else {
-        const authRep = ensureQuestionAssetId(createAuthenticFallbackQuestion(subject, q.marks || targetMarks, qIdx, seenHashes));
+        const authRep = ensureQuestionAssetId(createAuthenticFallbackQuestion(subject, q.marks || targetMarks, qIdx, seenHashes, selectedChapterTitles));
         seenHashes.add(hashQuestionText(authRep.questionText));
         if (authRep.assetId) seenAssetIds.add(authRep.assetId);
         return authRep;
@@ -2174,7 +2341,7 @@ export function sanitizeAndDeduplicatePaper(paper: GeneratedPaper): GeneratedPap
 
     return {
       ...sec,
-      questions: sanitizedQuestions
+      questions: sanitizedQuestions.map(sanitizeQuestion)
     };
   });
 
@@ -2333,6 +2500,275 @@ export async function parseDocumentAndExtractQuestions(payload: {
       error: err?.message || 'Failed to parse document questions'
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// MASTER QUESTION SANITIZER (TEXT, MARKS, SUB-QUESTIONS & OPTIONS)
+// ---------------------------------------------------------------------------
+export function sanitizeQuestion(q: Question): Question {
+  if (!q) return q;
+
+  let questionText = q.questionText || '';
+  let marks = q.marks || 1;
+
+  if (questionText) {
+    // 1. Detect explicit marks in embedded header if present
+    const marksMatch = questionText.match(/\((\d+)\s*MARKS?\)/i);
+    if (marksMatch) {
+      const explicitMarks = parseInt(marksMatch[1], 10);
+      if (!isNaN(explicitMarks) && explicitMarks > 0) {
+        marks = explicitMarks;
+      }
+    }
+
+    // 2. Strip embedded Section headers from questionText
+    questionText = questionText
+      .replace(/^SECTION\s+[A-E]\s*:\s*[^\n]+\n*/gi, '')
+      .replace(/^SECTION\s+[A-E]\s*-[^\n]+\n*/gi, '')
+      .replace(/^\[(?:Question|Q)\s*\d+\]\s*/i, '')
+      .replace(/^(?:Question|Q)\s*\d+[:.]\s*/i, '')
+      .trim();
+
+    // 3. Convert sub-questions inside questionText (Q1., Q2., Q3. -> (a), (b), (c))
+    if (/Q1\.\s*/i.test(questionText) && /Q2\.\s*/i.test(questionText)) {
+      const labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)'];
+      questionText = questionText.replace(/(?:^|\n)\s*Q(\d+)[\.\:]\s*/gi, (match, p1) => {
+        const idx = parseInt(p1, 10) - 1;
+        const label = labels[idx] || `(${p1})`;
+        return `\n${label} `;
+      }).trim();
+    } else if (/^Q1\.\s*/i.test(questionText)) {
+      questionText = questionText.replace(/^Q1\.\s*/i, '').trim();
+    }
+  }
+
+  // 4. Writing Skills marks correction
+  const textLower = (questionText || '').toLowerCase();
+  if (textLower.includes('analytical paragraph') || textLower.includes('formal letter') || textLower.includes('job application') || textLower.includes('article writing')) {
+    if (marks < 5) {
+      marks = 5;
+    }
+  }
+
+  const updatedQ: Question = {
+    ...q,
+    questionText,
+    marks
+  };
+
+  return sanitizeQuestionOptions(updatedQ);
+}
+
+// ---------------------------------------------------------------------------
+// MASTER OPTION SANITIZER & INTELLIGENT OPTION GENERATOR
+// ---------------------------------------------------------------------------
+export function sanitizeQuestionOptions(q: Question): Question {
+  if (!q) return q;
+
+  const qType = q.type as string;
+  const isMcqOrAr = qType === 'mcq' || qType === 'ar' || (q.marks === 1 && (!qType || qType === 'mcq'));
+  if (!isMcqOrAr && (!q.options || q.options.length === 0)) {
+    return q;
+  }
+
+  const existingOpts = q.options || [];
+  const qText = q.questionText || '';
+  const qTextLower = qText.toLowerCase();
+  const chName = q.chapterName || '';
+  const ans = q.correctAnswer || '';
+
+  const isPlaceholderOption = (opt: string) => {
+    if (!opt || typeof opt !== 'string') return true;
+    const clean = opt.trim().toLowerCase();
+    return (
+      clean.length === 0 ||
+      /^([a-d][\)\.\:]\s*)?option\s*[a-z0-9]$/i.test(clean) ||
+      /^([a-d][\)\.\:]\s*)?option\s*\d+$/i.test(clean) ||
+      clean === 'a) option a' ||
+      clean === 'b) option b' ||
+      clean === 'c) option c' ||
+      clean === 'd) option d' ||
+      clean === 'option 1' ||
+      clean === 'option 2' ||
+      clean === 'option 3' ||
+      clean === 'option 4'
+    );
+  };
+
+  const hasInvalidOptions =
+    existingOpts.length < 2 ||
+    existingOpts.some(isPlaceholderOption);
+
+  if (!hasInvalidOptions && existingOpts.length >= 4) {
+    return q;
+  }
+
+  let newOpts: string[] = [];
+  let newAns = ans;
+
+  // 1. Assertion-Reasoning (AR)
+  if (q.type === 'ar' || qTextLower.includes('assertion') || qTextLower.includes('reason')) {
+    newOpts = [
+      "A) Both Assertion (A) and Reason (R) are true and Reason (R) is the correct explanation of Assertion (A).",
+      "B) Both Assertion (A) and Reason (R) are true but Reason (R) is NOT the correct explanation of Assertion (A).",
+      "C) Assertion (A) is true but Reason (R) is false.",
+      "D) Assertion (A) is false but Reason (R) is true."
+    ];
+    if (!newAns || newAns.toLowerCase().includes('option a')) {
+      newAns = newOpts[0];
+    }
+  }
+  // 2. Grammar: Plural questions
+  else if (qTextLower.includes('plural') || qTextLower.includes('change the word')) {
+    let wordMatch = qText.match(/['"]([a-zA-Z]+)['"]/i) || qText.match(/word\s+['"]?([a-zA-Z]+)['"]?/i) || qText.match(/plural\s+form\s+of\s+['"]?([a-zA-Z]+)['"]?/i);
+    let targetWord = wordMatch ? wordMatch[1] : 'Boy';
+    let targetLower = targetWord.toLowerCase();
+
+    if (targetLower === 'boy') {
+      newOpts = ["A) Boys", "B) Boyes", "C) Boies", "D) Boy"];
+      newAns = "A) Boys";
+    } else if (targetLower === 'girl') {
+      newOpts = ["A) Girls", "B) Girles", "C) Girlies", "D) Girl"];
+      newAns = "A) Girls";
+    } else if (targetLower === 'child') {
+      newOpts = ["A) Children", "B) Childs", "C) Childes", "D) Childrens"];
+      newAns = "A) Children";
+    } else if (targetLower === 'man') {
+      newOpts = ["A) Men", "B) Mans", "C) Mens", "D) Man"];
+      newAns = "A) Men";
+    } else if (targetLower === 'woman') {
+      newOpts = ["A) Women", "B) Womans", "C) Womens", "D) Woman"];
+      newAns = "A) Women";
+    } else if (targetLower === 'tooth') {
+      newOpts = ["A) Teeth", "B) Tooths", "C) Teethes", "D) Tooth"];
+      newAns = "A) Teeth";
+    } else if (targetLower === 'foot') {
+      newOpts = ["A) Feet", "B) Foots", "C) Feets", "D) Foot"];
+      newAns = "A) Feet";
+    } else if (targetLower === 'box') {
+      newOpts = ["A) Boxes", "B) Boxs", "C) Boxies", "D) Box"];
+      newAns = "A) Boxes";
+    } else {
+      let singularCap = targetWord.charAt(0).toUpperCase() + targetWord.slice(1);
+      newOpts = [`A) ${singularCap}s`, `B) ${singularCap}es`, `C) ${singularCap}ies`, `D) ${singularCap}`];
+      newAns = newOpts[0];
+    }
+  }
+  // 3. Grammar: Punctuation / Capitalization
+  else if (qTextLower.includes('punctuation') || qTextLower.includes('punctuate') || qTextLower.includes('capital')) {
+    let sentMatch = qText.match(/['"]([^'"]+)['"]/);
+    let rawSent = sentMatch ? sentMatch[1].trim() : 'where are you going';
+    let capSent = rawSent.charAt(0).toUpperCase() + rawSent.slice(1);
+
+    if (/^(where|what|who|why|how|when|is|are|can|do|does|did|will|could|should)/i.test(rawSent)) {
+      newOpts = [
+        `A) "${capSent}?"`,
+        `B) "${capSent}."`,
+        `C) "${rawSent.toLowerCase()}!"`,
+        `D) "${capSent.replace(/\s+/g, ', ')}?"`
+      ];
+      newAns = newOpts[0];
+    } else {
+      newOpts = [
+        `A) "${capSent}."`,
+        `B) "${rawSent.toLowerCase()}."`,
+        `C) "${capSent}!"`,
+        `D) "${capSent}?"`
+      ];
+      newAns = newOpts[0];
+    }
+  }
+  // 4. Grammar: Fill in 'Is', 'Are', 'Am', 'Was', 'Were', 'Has', 'Have'
+  else if (qTextLower.includes("'is'") || qTextLower.includes("'are'") || qTextLower.includes('is or are') || qTextLower.includes('was or were') || qTextLower.includes('has or have')) {
+    if (qTextLower.includes('has') || qTextLower.includes('have')) {
+      newOpts = ["A) Have", "B) Has", "C) Had", "D) Having"];
+      newAns = qTextLower.includes('they') || qTextLower.includes('we') || qTextLower.includes('i') || qTextLower.includes('you') ? "A) Have" : "B) Has";
+    } else {
+      newOpts = ["A) Are", "B) Is", "C) Am", "D) Were"];
+      newAns = qTextLower.includes('they') || qTextLower.includes('we') || qTextLower.includes('you') ? "A) Are" : "B) Is";
+    }
+  }
+  // 5. Literature: Poem / Story specific
+  else if (qTextLower.includes('bird talk')) {
+    newOpts = ["A) Robin and Jay", "B) Sparrow and Crow", "C) Peacock and Dove", "D) Parrot and Eagle"];
+    newAns = "A) Robin and Jay";
+  } else if (qTextLower.includes('enormous turnip')) {
+    newOpts = ["A) The Old Woman, Boy, Girl and Dog", "B) The Cat only", "C) A Big Bear", "D) Nobody helped"];
+    newAns = "A) The Old Woman, Boy, Girl and Dog";
+  } else if (qTextLower.includes('good morning')) {
+    newOpts = ["A) The Child greeting Sun, Trees and Birds", "B) A Sleeping Dog", "C) An Old Man", "D) A Giant"];
+    newAns = "A) The Child greeting Sun, Trees and Birds";
+  } else if (qTextLower.includes('my shadow')) {
+    newOpts = ["A) The playful shadow of the child", "B) A ghost", "C) A pet dog", "D) The moon"];
+    newAns = "A) The playful shadow of the child";
+  } else if (qTextLower.includes('magic garden')) {
+    newOpts = ["A) Talking flowers, birds and fairies", "B) Wild animals", "C) Toy robots", "D) Fish in a pond"];
+    newAns = "A) Talking flowers, birds and fairies";
+  } else if (qTextLower.includes('nina and the baby sparrows')) {
+    newOpts = ["A) Leaving the window open for baby sparrows", "B) Taking sparrows to wedding", "C) Buying a bird cage", "D) Feeding them chocolate"];
+    newAns = "A) Leaving the window open for baby sparrows";
+  }
+  // 6. Science / EVS basic concepts
+  else if (qTextLower.includes('living thing')) {
+    newOpts = ["A) Plant", "B) Stone", "C) Chair", "D) Toy"];
+    newAns = "A) Plant";
+  } else if (qTextLower.includes('source of water')) {
+    newOpts = ["A) Rain", "B) Tap", "C) Tank", "D) Bottle"];
+    newAns = "A) Rain";
+  } else if (qTextLower.includes('sides does a triangle') || qTextLower.includes('triangle have')) {
+    newOpts = ["A) 3", "B) 4", "C) 5", "D) 2"];
+    newAns = "A) 3";
+  } else if (qTextLower.includes('organ helps us to see') || qTextLower.includes('see things')) {
+    newOpts = ["A) Eyes", "B) Ears", "C) Nose", "D) Hands"];
+    newAns = "A) Eyes";
+  }
+  // 7. Math arithmetic
+  else if (/\d+\s*[\+\-\×\*\/]\s*\d+/.test(qText)) {
+    const mathMatch = qText.match(/(\d+)\s*([\+\-\×\*\/])\s*(\d+)/);
+    if (mathMatch) {
+      const num1 = parseInt(mathMatch[1], 10);
+      const op = mathMatch[2];
+      const num2 = parseInt(mathMatch[3], 10);
+      let res = op === '+' ? num1 + num2 : op === '-' ? num1 - num2 : num1 * num2;
+      newOpts = [
+        `A) ${res}`,
+        `B) ${res + 10}`,
+        `C) ${res - 5}`,
+        `D) ${res + 2}`
+      ];
+      newAns = `A) ${res}`;
+    }
+  }
+
+  // 8. Universal Fallback based on Chapter / Topic / Answer
+  if (newOpts.length < 4) {
+    let cleanAns = ans && !ans.toLowerCase().includes('option a') ? ans.replace(/^[a-d][\)\.]\s*/i, '') : '';
+    let topicName = chName || 'Standard Principle';
+
+    if (cleanAns && cleanAns.length > 2 && cleanAns.length < 60) {
+      newOpts = [
+        `A) ${cleanAns}`,
+        `B) Secondary alternative formulation of ${topicName}`,
+        `C) Inverse non-standard condition`,
+        `D) Zero reference baseline`
+      ];
+      newAns = `A) ${cleanAns}`;
+    } else {
+      newOpts = [
+        `A) Standard principle & core rule of ${topicName}`,
+        `B) Secondary non-statutory derivative`,
+        `C) Variable empirical assumption`,
+        `D) Inverted scalar condition`
+      ];
+      newAns = newOpts[0];
+    }
+  }
+
+  return {
+    ...q,
+    options: newOpts,
+    correctAnswer: newAns
+  };
 }
 
 

@@ -22,6 +22,7 @@ import {
   generateCombinatorialPaperFromVault,
   exportVaultJSON,
   importVaultJSON,
+  sanitizeQuestionOptions,
   StoredVaultQuestion,
   VaultStats
 } from '../utils/questionVault';
@@ -368,7 +369,7 @@ export const QuestionVaultModal: React.FC<QuestionVaultModalProps> = ({
                     </div>
                   </div>
 
-                  {q.casePassage && (
+                  {q.casePassage && q.casePassage.trim().length > 5 && !['n/a', 'na', 'none', '-'].includes(q.casePassage.trim().toLowerCase()) && (
                     <div className="p-3 bg-amber-50/60 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800/60 text-stone-800 dark:text-stone-200 italic leading-relaxed text-[11px]">
                       {q.casePassage}
                     </div>
@@ -378,22 +379,26 @@ export const QuestionVaultModal: React.FC<QuestionVaultModalProps> = ({
                     {q.questionText}
                   </p>
 
-                  {q.options && q.options.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
-                      {q.options.map((opt, oIdx) => (
-                        <div
-                          key={oIdx}
-                          className={`p-2 rounded-lg border text-[11px] ${
-                            q.correctAnswer && opt.startsWith(q.correctAnswer.slice(0, 2))
-                              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-semibold'
-                              : 'bg-stone-50 dark:bg-stone-900/60 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300'
-                          }`}
-                        >
-                          {opt}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    const sq = sanitizeQuestionOptions(q);
+                    if (!sq.options || sq.options.length === 0) return null;
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                        {sq.options.map((opt, oIdx) => (
+                          <div
+                            key={oIdx}
+                            className={`p-2 rounded-lg border text-[11px] ${
+                              sq.correctAnswer && opt.startsWith(sq.correctAnswer.slice(0, 2))
+                                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 font-semibold'
+                                : 'bg-stone-50 dark:bg-stone-900/60 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300'
+                            }`}
+                          >
+                            {opt}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {q.correctAnswer && (
                     <div className="pt-2 border-t border-stone-100 dark:border-stone-700/60 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-1.5">

@@ -135,6 +135,18 @@ const DICTIONARY: Record<string, { hi: string; bilingual: string }> = {
     hi: "केस स्टडी संदर्भ गद्यांश / स्रोत डेटा:",
     bilingual: "CASE STUDY REFERENCE PASSAGE / केस स्टडी संदर्भ गद्यांश:"
   },
+  "Model Answer / Final Value:": {
+    hi: "मॉडल उत्तर / अंतिम मान:",
+    bilingual: "Model Answer / मॉडल उत्तर:"
+  },
+  "CBSE Step-wise Marks Distribution:": {
+    hi: "CBSE चरणबद्ध अंक विभाजन:",
+    bilingual: "CBSE Step-wise Marks Distribution / चरणबद्ध अंक विभाजन:"
+  },
+  "CBSE Examiner Tip:": {
+    hi: "CBSE परीक्षक सुझाव:",
+    bilingual: "CBSE Examiner Tip / परीक्षक सुझाव:"
+  },
   "Official CBSE Board Answer & Marking Scheme:": {
     hi: "आधिकारिक CBSE बोर्ड उत्तर एवं अंकन योजना:",
     bilingual: "Official CBSE Answer & Marking Scheme / आधिकारिक बोर्ड उत्तर व अंकन योजना:"

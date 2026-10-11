@@ -578,7 +578,7 @@ export function getMasterPool(subjectId: string): SubjectQuestionPool {
       if (lower.includes('phy') || lower.includes('042')) return CLASS12_PHYSICS_POOL;
       if (lower.includes('chem') || lower.includes('043')) return CLASS12_CHEMISTRY_POOL;
       if (lower.includes('bio') || lower.includes('044')) return CLASS12_BIOLOGY_POOL;
-      if (lower.includes('cs') || lower.includes('comp') || lower.includes('083')) return CLASS12_CS_POOL;
+      if (lower.includes('cs') || lower.includes('comp') || (lower.includes('083') && !lower.includes('evs') && !lower.includes('mth') && !lower.includes('eng') && !lower.includes('hin'))) return CLASS12_CS_POOL;
       if (lower.includes('math') || lower.includes('041')) return MATH_MASTER_POOL;
       if (lower.includes('eng') || lower.includes('184') || lower.includes('301')) return ENGLISH_MASTER_POOL;
       if (lower.includes('hin') || lower.includes('002') || lower.includes('085') || lower.includes('302')) return HINDI_A_MASTER_POOL;

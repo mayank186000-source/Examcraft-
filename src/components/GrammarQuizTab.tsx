@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   BookOpen, 
@@ -37,6 +37,28 @@ import {
 
 export const GrammarQuizTab: React.FC = () => {
   const { currentUser } = useAuth();
+
+  // Scroll Refs for Auto-Scroll Flow
+  const topHeaderRef = useRef<HTMLDivElement>(null);
+  const step1Ref = useRef<HTMLDivElement>(null);
+  const step2Ref = useRef<HTMLDivElement>(null);
+  const step3Ref = useRef<HTMLDivElement>(null);
+  const generateBtnRef = useRef<HTMLDivElement>(null);
+  const questionCardRef = useRef<HTMLDivElement>(null);
+  const resultsCardRef = useRef<HTMLDivElement>(null);
+  const lookupCardRef = useRef<HTMLDivElement>(null);
+
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>, offset = 80) => {
+    setTimeout(() => {
+      if (ref.current) {
+        const elementPosition = ref.current.getBoundingClientRect().top + window.pageYOffset;
+        window.scrollTo({
+          top: elementPosition - offset,
+          behavior: 'smooth'
+        });
+      }
+    }, 120);
+  };
 
   const [selectedClass, setSelectedClass] = useState<'3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12'>('3');
   const [selectedTopic, setSelectedTopic] = useState<string>('All Topics (Mixed Test)');
@@ -194,6 +216,7 @@ export const GrammarQuizTab: React.FC = () => {
     setQuizState('taking');
     setStartTime(Date.now());
     setCurrentTestCode(generateTestCode());
+    scrollToRef(questionCardRef);
   };
 
   const handleOptionSelect = (questionId: string, option: string) => {
@@ -267,6 +290,7 @@ export const GrammarQuizTab: React.FC = () => {
     setRecentSavedCodes(getAllGrammarResults().slice(0, 10));
 
     setQuizState('submitted');
+    scrollToRef(resultsCardRef);
 
     if (percentage >= 70) {
       try {
@@ -297,6 +321,7 @@ export const GrammarQuizTab: React.FC = () => {
           setLookupResult(match);
           setSearchError('');
           setQuizState('lookup');
+          scrollToRef(lookupCardRef);
           return;
         }
       }
@@ -357,7 +382,7 @@ export const GrammarQuizTab: React.FC = () => {
       </div>
 
       {/* QUICK LOOKUP CODE BAR & SEARCH */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="edtech-card quiz-card rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
           <KeyRound className="w-4 h-4 text-amber-500 shrink-0" />
           <span>Check Past Student Result by Test Code:</span>
@@ -471,7 +496,7 @@ export const GrammarQuizTab: React.FC = () => {
           )}
 
           {/* STEP 1: SELECT CLASS */}
-          <div className="space-y-4">
+          <div ref={step1Ref} className="space-y-4">
             <div className="flex items-center gap-2 text-slate-900 dark:text-white font-extrabold text-lg">
               <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black">1</span>
               <h3>Select Your Class (Apni Class Chunein)</h3>
@@ -484,7 +509,10 @@ export const GrammarQuizTab: React.FC = () => {
                   <button
                     key={cls}
                     type="button"
-                    onClick={() => setSelectedClass(cls)}
+                    onClick={() => {
+                      setSelectedClass(cls);
+                      scrollToRef(step2Ref);
+                    }}
                     className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col justify-between space-y-2 cursor-pointer ${
                       isSelected
                         ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-950/40 text-blue-950 dark:text-blue-100 shadow-md ring-2 ring-blue-500/20'
@@ -509,7 +537,7 @@ export const GrammarQuizTab: React.FC = () => {
 
           {/* STEP 2: TENSES QUESTION TYPE vs GENERAL GRAMMAR TOPIC */}
           {activeMode === 'tenses' ? (
-            <div className="space-y-4">
+            <div ref={step2Ref} className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-slate-900 dark:text-white font-extrabold text-lg">
                   <span className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black">2</span>
@@ -530,7 +558,10 @@ export const GrammarQuizTab: React.FC = () => {
                     <button
                       key={type.id}
                       type="button"
-                      onClick={() => setSelectedTenseType(type.id)}
+                      onClick={() => {
+                        setSelectedTenseType(type.id);
+                        scrollToRef(step3Ref);
+                      }}
                       className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col justify-between space-y-2 cursor-pointer ${
                         isSelected
                           ? 'border-amber-500 bg-amber-50/90 dark:bg-amber-950/50 text-amber-950 dark:text-amber-100 shadow-md ring-2 ring-amber-500/20'
@@ -555,7 +586,7 @@ export const GrammarQuizTab: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div ref={step2Ref} className="space-y-4">
               <div className="flex items-center gap-2 text-slate-900 dark:text-white font-extrabold text-lg">
                 <span className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-black">2</span>
                 <h3>Choose Grammar Topic</h3>
@@ -568,7 +599,10 @@ export const GrammarQuizTab: React.FC = () => {
                     <button
                       key={topic}
                       type="button"
-                      onClick={() => setSelectedTopic(topic)}
+                      onClick={() => {
+                        setSelectedTopic(topic);
+                        scrollToRef(step3Ref);
+                      }}
                       className={`p-3.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
                         isSelected
                           ? 'border-purple-600 bg-purple-50 dark:bg-purple-950/40 text-purple-950 dark:text-purple-200 shadow-xs'
@@ -585,7 +619,7 @@ export const GrammarQuizTab: React.FC = () => {
           )}
 
           {/* STEP 3: SELECT DIFFICULTY LEVEL */}
-          <div className="space-y-4">
+          <div ref={step3Ref} className="space-y-4">
             <div className="flex items-center gap-2 text-slate-900 dark:text-white font-extrabold text-lg">
               <span className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-black">3</span>
               <h3>Select Difficulty Level (कठिनाई का स्तर चुनें)</h3>
@@ -620,7 +654,10 @@ export const GrammarQuizTab: React.FC = () => {
                   <button
                     key={diff.id}
                     type="button"
-                    onClick={() => setSelectedDifficulty(diff.id)}
+                    onClick={() => {
+                      setSelectedDifficulty(diff.id);
+                      scrollToRef(generateBtnRef);
+                    }}
                     className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col justify-between space-y-2 cursor-pointer ${
                       isSelected
                         ? `${diff.activeBorder} shadow-md ring-2 ring-emerald-500/20`
@@ -646,7 +683,7 @@ export const GrammarQuizTab: React.FC = () => {
           </div>
 
           {/* STEP 4: QUESTION COUNT & LAUNCH */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div ref={generateBtnRef} className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Total Questions:</span>
               {[5, 10, 15].map(num => (
@@ -725,7 +762,7 @@ export const GrammarQuizTab: React.FC = () => {
 
       {/* TAKING TEST VIEW */}
       {quizState === 'taking' && currentQ && (
-        <div className="space-y-6">
+        <div ref={questionCardRef} className="space-y-6">
           {/* PROGRESS & TEST CODE HEADER */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 flex-wrap">
@@ -783,12 +820,12 @@ export const GrammarQuizTab: React.FC = () => {
                 )}
               </div>
 
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-relaxed">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-relaxed whitespace-pre-line">
                 {currentQ.questionText}
               </h2>
 
               {showHints[currentQ.id] && currentQ.hint && (
-                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-medium text-amber-900 dark:text-amber-200 animate-in fade-in duration-200">
+                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs font-medium text-amber-900 dark:text-amber-200 animate-in fade-in duration-200 whitespace-pre-line">
                   <span className="font-extrabold text-amber-800 dark:text-amber-300">Hint: </span>
                   {currentQ.hint}
                 </div>
@@ -828,7 +865,10 @@ export const GrammarQuizTab: React.FC = () => {
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <button
                 disabled={currentQuestionIndex === 0}
-                onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
+                onClick={() => {
+                  setCurrentQuestionIndex(prev => prev - 1);
+                  scrollToRef(questionCardRef);
+                }}
                 className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -837,7 +877,10 @@ export const GrammarQuizTab: React.FC = () => {
 
               {currentQuestionIndex < quizQuestions.length - 1 ? (
                 <button
-                  onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
+                  onClick={() => {
+                    setCurrentQuestionIndex(prev => prev + 1);
+                    scrollToRef(questionCardRef);
+                  }}
                   className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>Next Question</span>
@@ -859,7 +902,7 @@ export const GrammarQuizTab: React.FC = () => {
 
       {/* SUBMITTED / EVALUATION VIEW */}
       {quizState === 'submitted' && (
-        <div className="space-y-8 animate-in fade-in duration-300">
+        <div ref={resultsCardRef} className="space-y-8 animate-in fade-in duration-300">
           {/* SCORE CARD & TEST CODE BANNER */}
           {(() => {
             const { score, total, percentage } = calculateCurrentScore();
@@ -977,7 +1020,7 @@ export const GrammarQuizTab: React.FC = () => {
                           </span>
                         </div>
 
-                        <h4 className="text-base font-bold text-slate-900 dark:text-white pt-1">
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white pt-1 whitespace-pre-line">
                           {q.questionText}
                         </h4>
                       </div>
@@ -1010,7 +1053,7 @@ export const GrammarQuizTab: React.FC = () => {
                         <Lightbulb className="w-4 h-4 text-amber-500" />
                         <span>Simple Grammar Rule:</span>
                       </div>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium whitespace-pre-line">
                         {q.explanation}
                       </p>
                     </div>
@@ -1024,7 +1067,7 @@ export const GrammarQuizTab: React.FC = () => {
 
       {/* LOOKUP PAST RESULT VIEW */}
       {quizState === 'lookup' && lookupResult && (
-        <div className="space-y-8 animate-in fade-in duration-300">
+        <div ref={lookupCardRef} className="space-y-8 animate-in fade-in duration-300">
           <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-center border border-indigo-700/50">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-xs font-black tracking-wide text-blue-300">
               <Bookmark className="w-4 h-4 text-amber-300" />

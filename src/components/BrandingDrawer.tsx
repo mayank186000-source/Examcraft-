@@ -19,7 +19,7 @@ export const BrandingDrawer: React.FC<BrandingDrawerProps> = ({
 
   const presets = [
     { school: "ExamCraft CBSE Test Generator", tagline: "Smart, Efficient, Reliable Paper Generation", watermark: "EXAMCRAFT CBSE PAPER" },
-    { school: "Delhi Public School, R.K. Puram", tagline: "Affiliated to CBSE, New Delhi", watermark: "DPS EXAM PAPER" },
+    { school: "Central Board of Secondary Education", tagline: "Affiliated to CBSE, New Delhi", watermark: "CBSE EXAM PAPER" },
     { school: "Kendriya Vidyalaya Sangathan", tagline: "Ministry of Education, Govt of India", watermark: "KVS MODEL PAPER" },
     { school: "ExamCraft CBSE Coaching Academy", tagline: "Class 10th Board Preparation Series", watermark: "EXAMCRAFT SAMPLE" },
     { school: "St. Xavier's Senior Secondary School", tagline: "Affiliated to CBSE Code: 11029", watermark: "PRE-BOARD 2026" },

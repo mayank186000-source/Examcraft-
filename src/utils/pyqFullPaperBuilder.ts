@@ -1,7 +1,7 @@
 import { PYQPaper, GeneratedPaper, Question, PaperSection, CustomBranding } from '../types';
 import { PRELOADED_QUESTIONS } from '../data/cbseData';
 import { getMasterPool } from '../data/masterQuestionPool';
-import { getStoredVault, isSubjectAndClassMatch, hashQuestionText } from './questionVault';
+import { getStoredVault, isSubjectAndClassMatch, hashQuestionText, sanitizeQuestionOptions } from './questionVault';
 import {
   MATH_MCQ_BANK,
   SCIENCE_MCQ_BANK,
@@ -459,7 +459,7 @@ function generateFallbackQuestion(
   }
 
   // General default question with index-based variation to eliminate duplication
-  return {
+  return sanitizeQuestionOptions({
     id: qId,
     subjectId,
     chapterId: 'gen-ch',
@@ -469,11 +469,11 @@ function generateFallbackQuestion(
     difficulty: 'medium',
     isCompetency: true,
     questionText: `Official CBSE ${type.toUpperCase()} Board Exam Question - Unit ${index + 1} (${year} Examination)`,
-    options: type === 'mcq' || type === 'ar' ? ["A) Option A", "B) Option B", "C) Option C", "D) Option D"] : undefined,
-    correctAnswer: "A) Option A step-by-step answer as per official marking scheme.",
+    options: type === 'mcq' || type === 'ar' ? ["A) Standard statutory rule", "B) Empirical derivative", "C) Null variable", "D) Scalar constant"] : undefined,
+    correctAnswer: "A) Standard statutory rule step-by-step answer as per official marking scheme.",
     markingScheme: "Step-wise marking as per CBSE official evaluation scheme.",
     pyqYear: year
-  };
+  });
 }
 
 export function buildFullPYQBoardPaper(pyq: PYQPaper, branding: CustomBranding): GeneratedPaper {

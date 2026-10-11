@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as htmlToImage from 'html-to-image';
 import { jsPDF } from 'jspdf';
-import { GeneratedPaper, CustomBranding } from '../types';
+import { GeneratedPaper, CustomBranding, Question } from '../types';
 import { ExamTimerWidget } from './ExamTimerWidget';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -30,10 +30,14 @@ import {
   RefreshCw,
   RotateCcw,
   RotateCw,
-  Languages
+  Languages,
+  Edit3,
+  Save,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { MATH_MCQ_BANK, SCIENCE_MCQ_BANK, SOCIAL_MCQ_BANK, ENGLISH_MCQ_BANK, HINDI_A_MCQ_BANK, HINDI_B_MCQ_BANK } from '../data/textbookQuestions';
-import { getRefreshedQuestion, regenerateEntirePaper } from '../utils/questionVault';
+import { getRefreshedQuestion, regenerateEntirePaper, sanitizeQuestionOptions, sanitizeQuestion } from '../utils/questionVault';
 import { LanguageMode, translateInstruction, translateQuestionText, translateOption, translateHeaderTerm, translateAnswer, translatePaperState, ensurePaperHindiTranslations } from '../utils/translator';
 import { QuestionDiagramRenderer } from './QuestionDiagramRenderer';
 
@@ -134,6 +138,42 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
 
   const [refreshingKey, setRefreshingKey] = useState<string | null>(null);
   const [isRegeneratingPaper, setIsRegeneratingPaper] = useState<boolean>(false);
+  const [editingTarget, setEditingTarget] = useState<{ secIdx: number; qIdx: number; question: Question } | null>(null);
+
+  const handleSaveEditedQuestion = () => {
+    if (!editingTarget || !basePaper) return;
+    const { secIdx, qIdx, question: updatedQ } = editingTarget;
+    const key = `${secIdx}-${qIdx}`;
+
+    const currentQuestion = basePaper.sections[secIdx]?.questions[qIdx];
+    if (currentQuestion) {
+      const slotHist = questionHistory[key] || {
+        history: [currentQuestion],
+        currentIndex: 0
+      };
+
+      const updatedHistoryList = [
+        ...slotHist.history.slice(0, slotHist.currentIndex + 1),
+        updatedQ
+      ];
+      const newIndex = updatedHistoryList.length - 1;
+
+      setQuestionHistory(prev => ({
+        ...prev,
+        [key]: {
+          history: updatedHistoryList,
+          currentIndex: newIndex
+        }
+      }));
+    }
+
+    const newBasePaper: GeneratedPaper = JSON.parse(JSON.stringify(basePaper));
+    if (newBasePaper.sections[secIdx]?.questions[qIdx]) {
+      newBasePaper.sections[secIdx].questions[qIdx] = updatedQ;
+      setBasePaper(newBasePaper);
+    }
+    setEditingTarget(null);
+  };
 
   // Per-question history stack for Undo / Redo functionality
   const [questionHistory, setQuestionHistory] = useState<Record<string, { history: any[]; currentIndex: number }>>({});
@@ -410,7 +450,7 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
       sec.questions.forEach((q, qIdx) => {
         checkPageBreak(12);
 
-        if (q.casePassage) {
+        if (q.casePassage && q.casePassage.trim().length > 3 && q.casePassage.trim().toLowerCase() !== 'n/a' && q.casePassage.trim().toLowerCase() !== 'na') {
           doc.setFont('helvetica', 'italic');
           doc.setFontSize(8);
           const passLines = doc.splitTextToSize(`[CASE STUDY PASSAGE]:\n${q.casePassage}`, contentWidth);
@@ -668,7 +708,7 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
       const { title, subtitle } = getFormattedSectionHeader(sec.sectionName, sec.description, paper.subjectCode);
       fullText += `\n${title}${subtitle ? ` - ${subtitle}` : ''}\n\n`;
       sec.questions.forEach((q, idx) => {
-        if (q.casePassage) {
+        if (q.casePassage && q.casePassage.trim().length > 3 && !['n/a', 'na', 'none', '-'].includes(q.casePassage.trim().toLowerCase())) {
           fullText += `[CASE STUDY PASSAGE]:\n${q.casePassage}\n\n`;
         }
         fullText += `Q${idx + 1}. [${q.marks} Mark${q.marks > 1 ? 's' : ''}] ${q.questionText}\n`;
@@ -1039,7 +1079,8 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
                     </div>
 
                     <div className="space-y-6">
-                    {section.questions.map((q, qIdx) => {
+                    {section.questions.map((qRaw, qIdx) => {
+                      const q = sanitizeQuestion(qRaw);
                       const currentGlobalIdx = globalQCounter++;
                       const qUniqueId = q.id ? `sec-${secIdx}-${qIdx}-${q.id}` : `sec-${secIdx}-q-${qIdx}-${currentGlobalIdx}`;
                       const isAttempted = attemptedQuestions.has(qUniqueId);
@@ -1070,13 +1111,20 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
                         .replace(/^Based on the scientific study of Legislature, Executive & Judiciary:\s*/i, '')
                         .trim();
 
-                      if (!passageContent && q.questionText) {
+                      // Case study passages only apply to 4M+ case questions or Reading Comprehension passages
+                      const isShortQuestion = (q.marks || 1) <= 2 || q.type === 'mcq' || q.type === 'vsa' || q.type === 'sa' || q.type === 'ar';
+
+                      if (isShortQuestion && !isCaseType && !isCaseSection) {
+                        passageContent = '';
+                      }
+
+                      if (!passageContent && q.questionText && (isCaseType || isCaseSection || (q.marks && q.marks >= 4))) {
                         const splitPatterns = ['\nQ1.', '\n1.', '\n(a)', '\n(i)', '\na.', '\ni.', 'Q1.', '1.', '(a)', '(i)'];
                         for (const pattern of splitPatterns) {
                           if (q.questionText.includes(pattern)) {
                             const parts = q.questionText.split(pattern);
                             const cand = parts[0].replace(/^Read the case study.*?\n/i, '').replace(/^Based on the scientific study of Legislature.*?\n/i, '').trim();
-                            if (cand.length > 15) {
+                            if (cand.length > 20) {
                               passageContent = cand;
                               break;
                             }
@@ -1104,7 +1152,14 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
                         questionDisplay = q.questionText;
                       }
 
-                      const hasValidPassage = Boolean(passageContent && passageContent.trim().length > 0 && !passageContent.toLowerCase().includes('read the case study'));
+                      const cleanPassageLower = (passageContent || '').trim().toLowerCase();
+                      const isInvalidPassage = !passageContent ||
+                        passageContent.trim().length < 8 ||
+                        ['n/a', 'na', 'none', '-', 'null', 'undefined'].includes(cleanPassageLower) ||
+                        cleanPassageLower.startsWith('n/a') ||
+                        cleanPassageLower.includes('read the case study');
+
+                      const hasValidPassage = !isInvalidPassage;
 
                       return (
                         <div
@@ -1137,7 +1192,7 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
 
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                             <div className="flex-1 text-sm font-medium text-stone-900 leading-relaxed whitespace-pre-line">
-                              <span className="font-bold font-sans text-stone-900 mr-2">Q{qIdx + 1}.</span>
+                              <span className="font-bold font-sans text-stone-900 mr-2">Q{currentGlobalIdx}.</span>
                               {translateQuestionText(questionDisplay || q.questionText, languageMode, q)}
                             </div>
 
@@ -1154,6 +1209,15 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
                                   title={languageMode === 'hi' ? 'नया प्रश्न रिफ्रेश करें (Refresh)' : 'Refresh this question with a fresh authentic question'}
                                 >
                                   <RefreshCw className={`w-3.5 h-3.5 ${refreshingKey === `${secIdx}-${qIdx}` ? 'animate-spin text-emerald-600' : ''}`} />
+                                </button>
+
+                                <button
+                                  onClick={() => setEditingTarget({ secIdx, qIdx, question: JSON.parse(JSON.stringify(q)) })}
+                                  className="px-2 py-1 rounded-lg border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800 hover:text-blue-900 transition-all active:scale-95 cursor-pointer flex items-center gap-1 text-[11px] font-sans font-bold shadow-xs"
+                                  title={languageMode === 'hi' ? 'इस प्रश्न को संपादित करें (Edit Question)' : 'Edit this question text, options, marks & answer'}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 text-blue-700" />
+                                  <span>{languageMode === 'hi' ? 'Edit' : 'Edit'}</span>
                                 </button>
 
                                 <button
@@ -1232,15 +1296,19 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
                             </div>
                           </div>
 
-                        {q.options && q.options.length > 0 && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6 font-sans text-xs pt-1">
-                            {q.options.map((opt, oIdx) => (
-                              <div key={oIdx} className="text-stone-800 font-medium">
-                                {translateOption(opt, languageMode, (q as any).optionsHi?.[oIdx])}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {(() => {
+                          const sq = sanitizeQuestionOptions(q);
+                          if (!sq.options || sq.options.length === 0) return null;
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6 font-sans text-xs pt-1">
+                              {sq.options.map((opt, oIdx) => (
+                                <div key={oIdx} className="text-stone-800 font-medium">
+                                  {translateOption(opt, languageMode, (sq as any).optionsHi?.[oIdx])}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
 
                         {showAnswers && (
                           <div className="mt-4 p-4 bg-emerald-50/90 print:bg-emerald-50/60 rounded-xl border-2 border-emerald-300/80 text-xs font-sans space-y-3 shadow-sm">
@@ -1256,7 +1324,7 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
 
                             <div className="space-y-1">
                               <div className="text-[11px] font-bold text-stone-600 uppercase tracking-wider">
-                                Model Answer / Final Value:
+                                {translateHeaderTerm('Model Answer / Final Value:', languageMode)}
                               </div>
                               <p className="font-semibold text-stone-900 bg-white p-2.5 rounded-lg border border-emerald-200 leading-relaxed text-xs">
                                 {translateAnswer(q.correctAnswer, languageMode)}
@@ -1266,26 +1334,26 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
                             <div className="space-y-1.5">
                               <div className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
                                 <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-                                <span>CBSE Step-wise Marks Distribution:</span>
+                                <span>{translateHeaderTerm('CBSE Step-wise Marks Distribution:', languageMode)}</span>
                               </div>
                               <div className="bg-emerald-900/5 p-3 rounded-lg border border-emerald-200 font-mono text-[11px] text-stone-800 space-y-1.5 whitespace-pre-line leading-relaxed">
-                                {q.markingScheme || (
+                                {translateInstruction(q.markingScheme || (
                                   q.marks === 1 ? "• [1 Mark] Correct option & concise key reason" :
                                   q.marks === 2 ? "• Step 1: Correct formula/principle [1 Mark]\n• Step 2: Accurate substitution & unit [1 Mark]" :
                                   q.marks === 3 ? "• Step 1: Fundamental concept/formula [1 Mark]\n• Step 2: Detailed intermediate steps/diagram [1 Mark]\n• Step 3: Final accurate answer with SI units [1 Mark]" :
                                   "• Step 1: Conceptual derivation/given equations [1.5 Marks]\n• Step 2: Stepwise logical calculation/labeled schematic [2.5 Marks]\n• Step 3: Conclusion with standard units & justifications [1 Mark]"
-                                )}
+                                ), languageMode)}
                               </div>
                             </div>
 
                             <div className="bg-amber-50 border border-amber-200/80 p-2.5 rounded-lg flex items-start gap-2 text-amber-900 text-[11px]">
                               <HelpCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                               <div>
-                                <span className="font-bold uppercase tracking-wider mr-1">CBSE Examiner Tip:</span>
-                                {q.marks === 1 ? "Write both the option letter (A/B/C/D) and the option text to secure full credit." :
+                                <span className="font-bold uppercase tracking-wider mr-1">{translateHeaderTerm('CBSE Examiner Tip:', languageMode)}</span>
+                                {translateInstruction(q.marks === 1 ? "Write both the option letter (A/B/C/D) and the option text to secure full credit." :
                                  q.marks === 2 ? "Always state the relevant formula and SI units clearly; 1/2 mark is deducted for missing units." :
                                  q.marks === 3 ? "Draw neat labeled diagrams or write balanced chemical equations with state symbols (s, l, g, aq)." :
-                                 "Underline final values and write clear sub-headings. Step marks are awarded even if the final calculation has minor arithmetic slips."}
+                                 "Underline final values and write clear sub-headings. Step marks are awarded even if the final calculation has minor arithmetic slips.", languageMode)}
                               </div>
                             </div>
                           </div>
@@ -1315,6 +1383,232 @@ export const PaperPreviewModal: React.FC<PaperPreviewModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Live Question Editor Modal */}
+      {editingTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50 dark:bg-stone-800/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-100 dark:bg-blue-950/60 rounded-lg text-blue-700 dark:text-blue-400">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-stone-900 dark:text-stone-100">
+                    {languageMode === 'hi' ? 'प्रश्न संपादित करें (Edit Question)' : 'Edit Question Content'}
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    {languageMode === 'hi' ? 'प्रश्न, विकल्प और उत्तर अपनी आवश्यकता अनुसार बदलें' : 'Modify question text, options, marks or answer key'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingTarget(null)}
+                className="p-2 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+              
+              {/* Marks & Question Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    {languageMode === 'hi' ? 'अंक (Marks)' : 'Marks'}
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={editingTarget.question.marks || 1}
+                    onChange={(e) => setEditingTarget({
+                      ...editingTarget,
+                      question: { ...editingTarget.question, marks: Number(e.target.value) }
+                    })}
+                    className="w-full p-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    {languageMode === 'hi' ? 'प्रकार (Type)' : 'Question Type'}
+                  </label>
+                  <select
+                    value={editingTarget.question.type || 'short'}
+                    onChange={(e) => setEditingTarget({
+                      ...editingTarget,
+                      question: { ...editingTarget.question, type: e.target.value as any }
+                    })}
+                    className="w-full p-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="mcq">MCQ (Multiple Choice)</option>
+                    <option value="vsa">Very Short Answer (VSA)</option>
+                    <option value="sa">Short Answer (SA)</option>
+                    <option value="la">Long Answer (LA)</option>
+                    <option value="case">Case-Based / Passage</option>
+                    <option value="ar">Assertion & Reason</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Question Text */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  {languageMode === 'hi' ? 'प्रश्न सामग्री (Question Text)' : 'Question Text'}
+                </label>
+                <textarea
+                  rows={4}
+                  value={editingTarget.question.questionText || ''}
+                  onChange={(e) => setEditingTarget({
+                    ...editingTarget,
+                    question: { ...editingTarget.question, questionText: e.target.value }
+                  })}
+                  className="w-full p-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed"
+                  placeholder="Type your custom question text here..."
+                />
+              </div>
+
+              {/* Case Study Passage if applicable */}
+              {(editingTarget.question.casePassage || editingTarget.question.type === 'case') && (
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    {languageMode === 'hi' ? 'केस स्टडी संदर्भ गद्यांश (Case Study Passage)' : 'Case Study Passage / Source Context'}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editingTarget.question.casePassage || ''}
+                    onChange={(e) => setEditingTarget({
+                      ...editingTarget,
+                      question: { ...editingTarget.question, casePassage: e.target.value }
+                    })}
+                    className="w-full p-3 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 text-stone-900 dark:text-stone-100 font-serif italic focus:ring-2 focus:ring-amber-500 outline-none"
+                    placeholder="Case passage text..."
+                  />
+                </div>
+              )}
+
+              {/* Options (for MCQ or AR or if options present) */}
+              {(editingTarget.question.type === 'mcq' || editingTarget.question.type === 'ar' || (editingTarget.question.options && editingTarget.question.options.length > 0)) && (
+                <div className="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-stone-700 dark:text-stone-300">
+                      {languageMode === 'hi' ? 'विकल्प (Options)' : 'Multiple Choice Options'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const opts = editingTarget.question.options || [];
+                        const prefix = String.fromCharCode(65 + opts.length); // A, B, C, D
+                        setEditingTarget({
+                          ...editingTarget,
+                          question: { ...editingTarget.question, options: [...opts, `(${prefix}) New Option`] }
+                        });
+                      }}
+                      className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{languageMode === 'hi' ? 'विकल्प जोड़ें' : 'Add Option'}</span>
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {(editingTarget.question.options || []).map((opt, oIdx) => (
+                      <div key={oIdx} className="flex items-center gap-2">
+                        <span className="text-xs font-bold font-mono text-stone-400 w-6">
+                          {String.fromCharCode(65 + oIdx)}.
+                        </span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const newOpts = [...(editingTarget.question.options || [])];
+                            newOpts[oIdx] = e.target.value;
+                            setEditingTarget({
+                              ...editingTarget,
+                              question: { ...editingTarget.question, options: newOpts }
+                            });
+                          }}
+                          className="flex-1 p-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newOpts = (editingTarget.question.options || []).filter((_, idx) => idx !== oIdx);
+                            setEditingTarget({
+                              ...editingTarget,
+                              question: { ...editingTarget.question, options: newOpts }
+                            });
+                          }}
+                          className="p-2 text-stone-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Correct Answer / Solution */}
+              <div className="border-t border-stone-200 dark:border-stone-800 pt-3">
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  {languageMode === 'hi' ? 'सही उत्तर / मॉडल सॉल्यूशन (Correct Answer)' : 'Correct Answer / Model Solution'}
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingTarget.question.correctAnswer || ''}
+                  onChange={(e) => setEditingTarget({
+                    ...editingTarget,
+                    question: { ...editingTarget.question, correctAnswer: e.target.value }
+                  })}
+                  className="w-full p-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 text-stone-900 dark:text-stone-100 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="Official answer or correct option letter..."
+                />
+              </div>
+
+              {/* Marking Scheme */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  {languageMode === 'hi' ? 'चरणबद्ध अंकन योजना (Marking Scheme)' : 'Step-wise Marking Scheme'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={editingTarget.question.markingScheme || ''}
+                  onChange={(e) => setEditingTarget({
+                    ...editingTarget,
+                    question: { ...editingTarget.question, markingScheme: e.target.value }
+                  })}
+                  className="w-full p-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="• Step 1: Formula [1 Mark]&#10;• Step 2: Final calculation [1 Mark]"
+                />
+              </div>
+
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="px-6 py-3.5 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setEditingTarget(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
+              >
+                {languageMode === 'hi' ? 'रद्द करें' : 'Cancel'}
+              </button>
+              <button
+                onClick={handleSaveEditedQuestion}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{languageMode === 'hi' ? 'परिवर्तन सहेजें' : 'Save Changes'}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -192,13 +192,158 @@ export const CLASS_5_EVS_POOL: SubjectQuestionPool = {
   ]
 };
 
-// Global lookup for Middle School Master Pools
+// ==========================================
+// 6. CLASS 3 EVS / SCIENCE MASTER POOL
+// ==========================================
+export const CLASS_3_EVS_POOL: SubjectQuestionPool = {
+  mcqs: [
+    { q: "Which of the following animals can fly in the sky?", opts: ["A) Sparrow", "B) Frog", "C) Dog", "D) Fish"], ans: "A) Sparrow", ch: "Poonam's Day Out" },
+    { q: "What is the main natural source of fresh water on Earth?", opts: ["A) Rain", "B) Well", "C) Tap", "D) Handpump"], ans: "A) Rain", ch: "Water O' Water!" },
+    { q: "Which part of a plant grows under the ground and absorbs water?", opts: ["A) Root", "B) Leaf", "C) Flower", "D) Stem"], ans: "A) Root", ch: "The Plant Fairy" },
+    { q: "Which of the following food items is rich in energy and made from rice?", opts: ["A) Idli", "B) Chapati", "C) Omelette", "D) Salad"], ans: "A) Idli", ch: "Foods We Eat" },
+    { q: "How many sense organs do human beings have to feel and sense their surroundings?", opts: ["A) 5", "B) 4", "C) 6", "D) 2"], ans: "A) 5", ch: "Saying Without Speaking" }
+  ],
+  vsas: [
+    { q: "Name two natural sources of water and write one simple way to save water at home.", ans: "Natural sources: Rain, Rivers, Ponds.\nWay to save water: Turn off the tap while brushing teeth and reuse leftover water for plants.", ch: "Water O' Water!" },
+    { q: "Why is family called our 'first school'? State two things we learn from our family.", ans: "Family is where we learn our first habits, language, respect for elders, and good manners before going to school.", ch: "Our First School" }
+  ],
+  sas: [
+    { q: "(a) Name three different methods of cooking food with one example of each.\n(b) Why should we wash vegetables before cutting them?", ans: "(a) 1. Boiling (Rice), 2. Roasting (Roti), 3. Frying (Puri).\n(b) Washing before cutting removes dirt and germs without washing away essential vitamins.", ch: "What is Cooking?" }
+  ],
+  las: [
+    { q: "(a) Differentiate between Kutcha house and Pucca house with examples of materials used.\n(b) Write three good habits to keep our home and school clean.", ans: "(a) Kutcha house is made of mud, straw, and bamboo (e.g., hut). Pucca house is made of bricks, cement, and iron (e.g., flat/bungalow).\n(b) 1. Throw garbage in dustbin. 2. Keep things in proper place. 3. Sweep and mop floors daily.", ch: "Chhotu's House" }
+  ],
+  cases: [
+    {
+      passage: "Riya went to a bird sanctuary with her family. She saw peacocks showing beautiful colorful feathers, ducks swimming in water with webbed feet, and woodpeckers making holes in tree trunks with sharp beaks.",
+      q: "Q1. How do feathers help birds in daily life? (1M)\nQ2. Which bird is the national bird of India? (1M)\nQ3. State two special features of water birds like ducks. (2M)",
+      ans: "Q1. Feathers keep birds warm and help them fly.\nQ2. Peacock.\nQ3. Webbed feet for swimming in water and waterproof oil-coated feathers.",
+      ch: "Flying High"
+    }
+  ]
+};
+
+// ==========================================
+// 7. CLASS 3 MATHEMATICS MASTER POOL
+// ==========================================
+export const CLASS_3_MATHS_POOL: SubjectQuestionPool = {
+  mcqs: [
+    { q: "What is the expanded form of the 3-digit number 478?", opts: ["A) 400 + 70 + 8", "B) 40 + 700 + 8", "C) 4 + 7 + 8", "D) 400 + 7"], ans: "A) 400 + 70 + 8", ch: "Fun with Numbers" },
+    { q: "How many centimeters (cm) make 1 Meter (m)?", opts: ["A) 100 cm", "B) 10 cm", "C) 1000 cm", "D) 50 cm"], ans: "A) 100 cm", ch: "Long and Short" },
+    { q: "A square shape has how many straight sides and corners?", opts: ["A) 4 equal sides and 4 corners", "B) 3 sides and 3 corners", "C) 0 sides and 0 corners", "D) 2 sides and 4 corners"], ans: "A) 4 equal sides and 4 corners", ch: "Shapes and Designs" },
+    { q: "If 1 notebook costs ₹25, what will be the cost of 4 such notebooks?", opts: ["A) ₹100", "B) ₹75", "C) ₹50", "D) ₹125"], ans: "A) ₹100", ch: "How Many Times?" },
+    { q: "How many grams (g) are equal to 1 Kilogram (kg)?", opts: ["A) 1000 g", "B) 100 g", "C) 10 g", "D) 500 g"], ans: "A) 1000 g", ch: "Who is Heavier?" }
+  ],
+  vsas: [
+    { q: "Convert 3 meters and 45 centimeters into centimeters.", ans: "3 meters = 300 cm. So, 300 cm + 45 cm = 345 cm.", ch: "Long and Short" },
+    { q: "A shopkeeper has 150 apples. He sells 65 apples in the morning. How many apples are left with him?", ans: "Apples left = 150 - 65 = 85 apples.", ch: "Give and Take" }
+  ],
+  sas: [
+    { q: "(a) Write the place value and face value of digit 7 in the number 782.\n(b) Solve: 345 + 218.", ans: "(a) Place Value = 700 (Hundreds), Face Value = 7.\n(b) 345 + 218 = 563.", ch: "Fun with Numbers" }
+  ],
+  las: [
+    { q: "(a) A box contains 8 boxes of crayons. Each crayon box has 6 crayons. How many crayons are there in total? Solve using multiplication.\n(b) Divide 24 chocolates equally among 4 children. How many chocolates does each child get?", ans: "(a) Total crayons = 8 × 6 = 48 crayons.\n(b) Each child gets = 24 ÷ 4 = 6 chocolates.", ch: "How Many Times? & Can We Share?" }
+  ],
+  cases: [
+    {
+      passage: "Aarav went to a stationary shop. He bought a pencil box for ₹45, a drawing notebook for ₹30, and a pack of erasers for ₹15. He gave a ₹100 note to the shopkeeper.",
+      q: "Q1. Calculate the total bill amount Aarav spent. (2M)\nQ2. How much change amount will the shopkeeper return to Aarav? (2M)",
+      ans: "Q1. Total bill = ₹45 + ₹30 + ₹15 = ₹90.\nQ2. Change returned = ₹100 - ₹90 = ₹10.",
+      ch: "Rupees and Paise"
+    }
+  ]
+};
+
+// ==========================================
+// 8. CLASS 3 ENGLISH MASTER POOL
+// ==========================================
+export const CLASS_3_ENGLISH_POOL: SubjectQuestionPool = {
+  mcqs: [
+    { q: "Identify the Noun (naming word) in the sentence: 'The dog barked loudly.'", opts: ["A) Dog", "B) Barked", "C) Loudly", "D) The"], ans: "A) Dog", ch: "Grammar & Vocabulary" },
+    { q: "What is the opposite word (antonym) of 'Hot'?", opts: ["A) Cold", "B) Warm", "C) Dry", "D) Big"], ans: "A) Cold", ch: "Grammar & Vocabulary" },
+    { q: "Choose the correct Plural form of the word 'Child':", opts: ["A) Children", "B) Childs", "C) Childrens", "D) Childes"], ans: "A) Children", ch: "Grammar & Vocabulary" },
+    { q: "In the poem 'Good Morning', whom does the child greet in the morning?", opts: ["A) Sky, Sun, Wind, Birds and Trees", "B) Only Teacher", "C) Only Mother", "D) Moon and Stars"], ans: "A) Sky, Sun, Wind, Birds and Trees", ch: "Marigold Unit 1: Good Morning" },
+    { q: "Who helped the old man to pull up the enormous turnip?", opts: ["A) The old woman, the boy, and the girl", "B) Only a dog", "C) A rabbit", "D) Nobody"], ans: "A) The old woman, the boy, and the girl", ch: "Marigold Unit 3: The Enormous Turnip" }
+  ],
+  vsas: [
+    { q: "Fill in the blanks with correct prepositions (in, on, under):\n(a) The book is ______ the table.\n(b) The cat is sleeping ______ the bed.", ans: "(a) on\n(b) under", ch: "Section B - Grammar" },
+    { q: "Write two lines describing what Nina was worried about in 'Nina and the Baby Sparrows'.", ans: "Nina was worried about two baby sparrows in her room because if her family locked the room for the wedding, the mother sparrow could not feed them.", ch: "Marigold Unit 2: Nina and Baby Sparrows" }
+  ],
+  sas: [
+    { q: "Write a short 4-line paragraph on 'My Best Friend'.", ans: "My best friend's name is Rohan. He studies with me in Class 3. He is very polite and always shares his lunch. We play football together every evening.", ch: "Section B - Writing Skills" }
+  ],
+  las: [
+    { q: "Read the short passage and answer questions:\n'Tommy is a small brown puppy. He loves to play with a red ball in the garden. When he is happy, he wags his tail and barks softly.'\n(a) What is Tommy and what color is he?\n(b) What does Tommy love to play with?\n(c) What does Tommy do when he is happy?", ans: "(a) Tommy is a small brown puppy.\n(b) He loves to play with a red ball in the garden.\n(c) He wags his tail and barks softly.", ch: "Section A - Reading Comprehension" }
+  ],
+  cases: [
+    {
+      passage: "One sunny morning, a beautiful yellow butterfly flew in Sonu's garden. Sonu wanted to catch the butterfly, but it flew from the rose to a lotus leaf in the pond, and then caught in a spider's web. Sonu saved the butterfly and let it fly free.",
+      q: "Q1. What was the color of the butterfly in Sonu's garden? (1M)\nQ2. Where did the butterfly get trapped? (1M)\nQ3. What moral message do we learn from Sonu saving the butterfly? (2M)",
+      ans: "Q1. Yellow.\nQ2. In a spider's web in the garden.\nQ3. We should be kind to small animals and insects and let them live freely in nature.",
+      ch: "Marigold Unit 5: The Yellow Butterfly"
+    }
+  ]
+};
+
+// ==========================================
+// 9. CLASS 3 HINDI MASTER POOL
+// ==========================================
+export const CLASS_3_HINDI_POOL: SubjectQuestionPool = {
+  mcqs: [
+    { q: "‘कक्कू’ कविता में कक्कू का क्या अर्थ है?", opts: ["A) कोयल", "B) कौआ", "C) तोता", "D) मोर"], ans: "A) कोयल", ch: "रिमझिम: कक्कू" },
+    { q: "‘लड़का’ शब्द का सही स्त्रीलिंग शब्द चुनिए:", opts: ["A) लड़की", "B) महिला", "C) माता", "D) बच्ची"], ans: "A) लड़की", ch: "खंड ख - व्याकरण" },
+    { q: "‘दिन’ शब्द का विलोम (उल्टा) शब्द क्या होगा?", opts: ["A) रात", "B) शाम", "C) सुबह", "D) दोपहर"], ans: "A) रात", ch: "खंड ख - व्याकरण" },
+    { q: "शेखीबाज़ मक्खी को अंत में किसने अपनी समझदारी से सबक सिखाया?", opts: ["A) लोमड़ी ने", "B) शेर ने", "C) हाथी ने", "D) चींटी ने"], ans: "A) लोमड़ी ने", ch: "रिमझिम: शेखीबाज़ मक्खी" },
+    { q: "‘चाँद वाली अम्मा’ कहानी में अम्मा झाड़ू लेकर कहाँ जा बैठीं?", opts: ["A) चाँद पर", "B) पेड़ पर", "C) छत पर", "D) पहाड़ पर"], ans: "A) चाँद पर", ch: "रिमझिम: चाँद वाली अम्मा" }
+  ],
+  vsas: [
+    { q: "निम्नलिखित शब्दों के लिंग बदलो:\n(क) राजा - _______\n(ख) मोर - _______", ans: "(क) रानी\n(ख) मोरनी", ch: "खंड ख - व्याकरण" },
+    { q: "‘शेखीबाज़ मक्खी’ पाठ से हमें क्या सीख मिलती है?", ans: "हमें कभी भी घमंड नहीं करना चाहिए क्योंकि घमंडी का सिर हमेशा नीचा होता है।", ch: "रिमझिम: शेखीबाज़ मक्खी" }
+  ],
+  sas: [
+    { q: "‘मेरा प्रिय खिलौना’ विषय पर 3-4 सरल वाक्य लिखिए।", ans: "मेरा प्रिय खिलौना एक रिमोट वाली कार है। इसका रंग लाल है। यह बहुत तेज़ दौड़ती है। मैं शाम को अपने दोस्तों के साथ इससे खेलता हूँ।", ch: "खंड घ - रचनात्मक लेखन" }
+  ],
+  las: [
+    { q: "दिए गए अपठित गद्यांश को पढ़कर प्रश्नों के उत्तर लिखिए:\n‘एक वटवृक्ष पर एक चिड़िया का घोंसला था। घोंसले में दो सुंदर अंडे थे। चिड़िया दिन भर दाना-पानी लाती और अपने बच्चों की देखभाल करती थी।’\n(क) चिड़िया का घोंसला कहाँ था?\n(ख) घोंसले में क्या था?\n(ग) चिड़िया दिन भर क्या करती थी?", ans: "(क) चिड़िया का घोंसला एक वटवृक्ष पर था।\n(ख) घोंसले में दो सुंदर अंडे थे।\n(ग) चिड़िया दिन भर दाना-पानी लाती और अपने बच्चों की देखभाल करती थी।", ch: "खंड क - अपठित बोध" }
+  ],
+  cases: [
+    {
+      passage: "बारिश का मौसम था। अचानक आसमान में काले-काले बादल घिर आए। छम-छम करके बारिश होने लगी। रोहन और उसकी बहन प्रिया ने कागज़ की नाव बनाई और पानी में चलाई।",
+      q: "प्रश्न 1. आसमान में कैसे बादल घिर आए? (1 अंक)\nप्रश्न 2. रोहन और प्रिया ने बारिश में क्या किया? (1 अंक)\nप्रश्न 3. बारिश के मौसम में हमें क्या सावधानियाँ रखनी चाहिए? (2 अंक)",
+      ans: "उत्तर 1. काले-काले बादल घिर आए।\nउत्तर 2. दोनों ने कागज़ की नाव बनाकर पानी में चलाई।\nउत्तर 3. हमें गंदे पानी में जाने से बचना चाहिए और मच्छर जनित बीमारियों से बचने के लिए साफ़-सफ़ाई रखनी चाहिए।",
+      ch: "रिमझिम: टिपटिपवा"
+    }
+  ]
+};
+
+// Global lookup for Middle School & Primary Master Pools
 export function getMiddleSchoolMasterPool(subjectId: string): SubjectQuestionPool | null {
-  const id = subjectId.toLowerCase();
-  if (id.includes('class8-sci') || id.includes('088-sci')) return CLASS_8_SCIENCE_POOL;
-  if (id.includes('class8-mth') || id.includes('088-mth')) return CLASS_8_MATHS_POOL;
-  if (id.includes('class7-sci') || id.includes('087-sci')) return CLASS_7_SCIENCE_POOL;
-  if (id.includes('class6-sci') || id.includes('086-sci')) return CLASS_6_SCIENCE_POOL;
-  if (id.includes('class5-evs') || id.includes('085-evs')) return CLASS_5_EVS_POOL;
+  const id = (subjectId || '').toLowerCase();
+  
+  // Class 3
+  if (id.includes('class3-science') || id.includes('class3-evs') || id.includes('083-evs') || id.includes('c3-evs') || id.includes('class3-env') || id.includes('c3-science')) return CLASS_3_EVS_POOL;
+  if (id.includes('class3-mth') || id.includes('class3-math') || id.includes('083-mth') || id.includes('c3-mth') || id.includes('c3-math')) return CLASS_3_MATHS_POOL;
+  if (id.includes('class3-eng') || id.includes('083-eng') || id.includes('c3-eng') || id.includes('c3-english')) return CLASS_3_ENGLISH_POOL;
+  if (id.includes('class3-hin') || id.includes('083-hin') || id.includes('c3-hin') || id.includes('c3-hindi')) return CLASS_3_HINDI_POOL;
+
+  // Class 4 & 5
+  if (id.includes('class4-science') || id.includes('class4-evs') || id.includes('084-evs') || id.includes('c4-evs')) return CLASS_3_EVS_POOL;
+  if (id.includes('class4-mth') || id.includes('class4-math') || id.includes('084-mth') || id.includes('c4-mth')) return CLASS_3_MATHS_POOL;
+  if (id.includes('class4-eng') || id.includes('084-eng') || id.includes('c4-eng')) return CLASS_3_ENGLISH_POOL;
+  if (id.includes('class4-hin') || id.includes('084-hin') || id.includes('c4-hin')) return CLASS_3_HINDI_POOL;
+
+  if (id.includes('class5-evs') || id.includes('085-evs') || id.includes('c5-evs') || id.includes('class5-science')) return CLASS_5_EVS_POOL;
+  if (id.includes('class5-mth') || id.includes('class5-math') || id.includes('085-mth') || id.includes('c5-mth')) return CLASS_3_MATHS_POOL;
+  if (id.includes('class5-eng') || id.includes('085-eng') || id.includes('c5-eng')) return CLASS_3_ENGLISH_POOL;
+  if (id.includes('class5-hin') || id.includes('085-hin') || id.includes('c5-hin')) return CLASS_3_HINDI_POOL;
+
+  // Class 6, 7, 8
+  if (id.includes('class8-sci') || id.includes('088-sci') || id.includes('c8-sci')) return CLASS_8_SCIENCE_POOL;
+  if (id.includes('class8-mth') || id.includes('088-mth') || id.includes('c8-mth')) return CLASS_8_MATHS_POOL;
+  if (id.includes('class7-sci') || id.includes('087-sci') || id.includes('c7-sci')) return CLASS_7_SCIENCE_POOL;
+  if (id.includes('class7-mth') || id.includes('087-mth') || id.includes('c7-mth')) return CLASS_8_MATHS_POOL;
+  if (id.includes('class6-sci') || id.includes('086-sci') || id.includes('c6-sci')) return CLASS_6_SCIENCE_POOL;
+  if (id.includes('class6-mth') || id.includes('086-mth') || id.includes('c6-mth')) return CLASS_8_MATHS_POOL;
+
   return null;
 }

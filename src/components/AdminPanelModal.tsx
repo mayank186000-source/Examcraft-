@@ -38,10 +38,14 @@ import {
   Calendar,
   ArrowUpDown,
   RotateCcw,
-  BarChart3
+  BarChart3,
+  Activity,
+  Star,
+  History
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { User, DownloadRecord, GeneratedPaper, QuestionBankSet } from '../types';
+import { formatGuestName } from '../utils/guestTracker';
 import { fetchQuestionBankSets, saveQuestionBankSet, deleteQuestionBankSet } from '../utils/questionBankService';
 import { getAllSavedPapers, deletePaperFromRegistry, syncSavedPapersWithServer } from '../utils/paperRegistry';
 import { useFirestoreActivityLog } from '../hooks/useFirestoreActivityLog';
@@ -52,6 +56,7 @@ import {
   SavedGrammarResult, 
   GRAMMAR_TOPICS 
 } from '../data/grammarQuestions';
+import { fetchAllFeedbacks, updateFeedbackStatus, deleteFeedbackItem, FeedbackItem } from '../services/feedbackService';
 import { CBSE_SUBJECTS, getSubjectsByClass } from '../data/cbseData';
 import {
   saveCustomQuestionsToServerVault,
@@ -131,8 +136,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [realtimeUsers, setRealtimeUsers] = useState<User[]>([]);
   const [realtimeActivities, setRealtimeActivities] = useState<StudentActivityDoc[]>([]);
   const [isRealtimeActive, setIsRealtimeActive] = useState<boolean>(true);
-  // 4 Primary Systematic Navigation Categories
-  type MainTab = 'overview' | 'users' | 'content' | 'logs';
+  // 5 Primary Systematic Navigation Categories
+  type MainTab = 'overview' | 'users' | 'content' | 'logs' | 'feedbacks';
   const [mainTab, setMainTab] = useState<MainTab>('overview');
   const [usersSubTab, setUsersSubTab] = useState<'all_students' | 'email_students' | 'guest_students' | 'admins'>('all_students');
   const [studentCategoryFilter, setStudentCategoryFilter] = useState<'all' | 'email' | 'guest'>('all');
@@ -140,6 +145,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [logUserTypeFilter, setLogUserTypeFilter] = useState<'all' | 'email' | 'guest'>('all');
   const [contentSubTab, setContentSubTab] = useState<'papers' | 'questionBank' | 'grammar' | 'importer'>('papers');
   const [logsSubTab, setLogsSubTab] = useState<'downloads' | 'firestore'>('downloads');
+
+  // Feedbacks State
+  const [feedbacksList, setFeedbacksList] = useState<FeedbackItem[]>([]);
+  const [feedbackCategoryFilter, setFeedbackCategoryFilter] = useState<string>('all');
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>('all');
+  const [feedbackSearch, setFeedbackSearch] = useState<string>('');
 
   // Universal Date & Time Filter State
   type DatePreset = 'all' | 'today' | 'yesterday' | '7days' | '30days' | 'custom';
@@ -209,16 +220,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   }, [timeSortOrder]);
 
   // Backward-compatible activeTab mapped dynamically from systematic mainTab & subTab
-  const activeTab: 'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank' = React.useMemo(() => {
+  const activeTab: 'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank' | 'feedbacks' = React.useMemo(() => {
     if (mainTab === 'overview') return 'overview';
     if (mainTab === 'users') return usersSubTab === 'admins' ? 'admins' : 'users';
     if (mainTab === 'content') return contentSubTab;
     if (mainTab === 'logs') return logsSubTab === 'firestore' ? 'firestore' : 'logs';
+    if (mainTab === 'feedbacks') return 'feedbacks';
     return 'overview';
   }, [mainTab, usersSubTab, contentSubTab, logsSubTab]);
 
   // Seamless navigation helper that updates both main and sub-categories
-  const setActiveTab = React.useCallback((tab: 'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank') => {
+  const setActiveTab = React.useCallback((tab: 'overview' | 'users' | 'logs' | 'admins' | 'papers' | 'grammar' | 'firestore' | 'importer' | 'questionBank' | 'feedbacks') => {
     if (tab === 'overview') {
       setMainTab('overview');
     } else if (tab === 'users') {
@@ -246,6 +258,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     } else if (tab === 'firestore') {
       setMainTab('logs');
       setLogsSubTab('firestore');
+    } else if (tab === 'feedbacks') {
+      setMainTab('feedbacks');
     }
   }, []);
   const [userSearch, setUserSearch] = useState<string>('');
@@ -255,6 +269,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [paperClassFilter, setPaperClassFilter] = useState<string>('all');
   const [paperSubjectFilter, setPaperSubjectFilter] = useState<string>('all');
   const [paperMarksFilter, setPaperMarksFilter] = useState<string>('all');
+  const [showVipModal, setShowVipModal] = useState<boolean>(false);
 
   // Question Bank Sets State
   const [questionBankSets, setQuestionBankSets] = useState<QuestionBankSet[]>([]);
@@ -416,6 +431,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       if (intervalId) clearInterval(intervalId);
     };
   }, [isOpen, refreshActivities]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchAllFeedbacks().then(data => setFeedbacksList(data)).catch(console.error);
+    }
+  }, [isOpen, mainTab]);
 
   // Real-time Firestore onSnapshot listeners for 'users', 'student_activities', 'quiz_submissions', 'generated_paper_logs', 'grammar_results', and 'saved_papers'
   React.useEffect(() => {
@@ -725,7 +746,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setTimeout(() => setActionSuccess(null), 4000);
   };
 
-  const totalDownloads = downloadLogs.length;
+  const safeDownloadLogs = Array.isArray(downloadLogs) ? downloadLogs : [];
+  const safeAllUsers = Array.isArray(allUsers) ? allUsers : [];
+  const safeAdminEmails = Array.isArray(adminEmails) ? adminEmails : [];
+  const safeUnlimitedVipEmails = Array.isArray(unlimitedVipEmails) ? unlimitedVipEmails : [];
+  const safeDeregisteredUserEmails = Array.isArray(deregisteredUserEmails) ? deregisteredUserEmails : [];
+  const safeSavedPapers = Array.isArray(savedPapers) ? savedPapers : [];
+  const safeGrammarResults = Array.isArray(grammarResults) ? grammarResults : [];
+  const safeRealtimeUsers = Array.isArray(realtimeUsers) ? realtimeUsers : [];
+  const safeRealtimeActivities = Array.isArray(realtimeActivities) ? realtimeActivities : [];
+
+  const totalDownloads = safeDownloadLogs.length;
+
+  const handleClearDownloadLogs = async () => {
+    await clearDownloadLogs();
+    setActionSuccess('Download logs successfully cleared.');
+    setTimeout(() => setActionSuccess(null), 3000);
+  };
 
   const handleCopyCode = (code: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -762,9 +799,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   const handleExportCSV = () => {
-    if (downloadLogs.length === 0) return;
+    const listToExport = filteredLogs.length > 0 ? filteredLogs : safeDownloadLogs;
+    if (listToExport.length === 0) return;
     const headers = ['Timestamp', 'User Email', 'User Name', 'Role', 'Subject', 'Paper Title', 'Paper Code'];
-    const rows = downloadLogs.map(l => [
+    const rows = listToExport.map(l => [
       `"${new Date(l.timestamp).toLocaleString()}"`,
       `"${l.userEmail}"`,
       `"${l.userName}"`,
@@ -807,7 +845,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // User paper generation counts
-  const userPaperStats = savedPapers.reduce((acc, paper) => {
+  const userPaperStats = safeSavedPapers.reduce((acc, paper) => {
     const rawEmail = paper.generatedBy?.email?.toLowerCase();
     const email = (!rawEmail || rawEmail === 'unknown@guest') ? 'guest@examcraft.internal' : rawEmail;
     const name = paper.generatedBy?.name || (email === 'guest@examcraft.internal' ? 'Guest User (Guest)' : 'Registered User');
@@ -820,7 +858,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   }, {} as Record<string, { name: string; email: string; count: number; papers: GeneratedPaper[] }>);
 
   // User Kids Grammar 5th-8th test generation and score stats
-  const userGrammarStats = grammarResults.reduce((acc, result) => {
+  const userGrammarStats = safeGrammarResults.reduce((acc, result) => {
     const rawEmail = result.userEmail?.toLowerCase();
     const email = (!rawEmail || rawEmail === 'unknown@guest') ? 'guest@examcraft.internal' : rawEmail;
     const name = result.userName || (email === 'guest@examcraft.internal' ? 'Guest Student (Guest)' : 'Registered Student');
@@ -854,7 +892,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     results: SavedGrammarResult[];
   }>);
 
-  const filteredGrammarResults = grammarResults
+  const filteredGrammarResults = safeGrammarResults
     .filter(res => {
       const matchesDate = isDateMatch(res.date || (res as any).createdAt);
       if (!matchesDate) return false;
@@ -880,21 +918,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Merge real-time snapshot users with AuthContext users for immediate multi-device visibility
   const effectiveAllUsers = React.useMemo(() => {
     const map = new Map<string, User>();
-    realtimeUsers.forEach(u => {
+    safeRealtimeUsers.forEach(u => {
       const key = (u.email || u.id || u.name || '').toLowerCase().trim();
       if (key) map.set(key, u);
     });
-    allUsers.forEach(u => {
+    safeAllUsers.forEach(u => {
       const key = (u.email || u.id || u.name || '').toLowerCase().trim();
       if (key && !map.has(key)) map.set(key, u);
     });
     return Array.from(map.values());
-  }, [realtimeUsers, allUsers]);
+  }, [safeRealtimeUsers, safeAllUsers]);
 
   // Merge real-time snapshot activities with hook activities
   const effectiveActivities = React.useMemo(() => {
-    return mergeActivities(realtimeActivities, firestoreActivities);
-  }, [realtimeActivities, firestoreActivities]);
+    return mergeActivities(safeRealtimeActivities, firestoreActivities || []);
+  }, [safeRealtimeActivities, firestoreActivities]);
 
   const GENERIC_RESERVED_TERMS = React.useMemo(() => new Set([
     'student',
@@ -1025,7 +1063,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   });
 
   // 5. Download Logs
-  downloadLogs.forEach(l => {
+  safeDownloadLogs.forEach(l => {
     if (isDeregisteredUser(l.userEmail, l.userName)) return;
     const emailKey = (l.userEmail || '').toLowerCase().trim();
     if (!emailKey) return;
@@ -1080,10 +1118,136 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     return Array.from(map.values());
   }, [effectiveActivities, masterUsersList]);
 
-  // Unique users list for System Download Activity Logs dropdown filter
+  // Filtered dataset for selected datePreset/custom dates
+  const filteredTimeframePapers = React.useMemo(() => {
+    return savedPapers.filter(p => isDateMatch(p.createdAt));
+  }, [savedPapers, isDateMatch]);
+
+  const filteredTimeframeActivities = React.useMemo(() => {
+    return effectiveActivities.filter(a => isDateMatch(a.timestamp));
+  }, [effectiveActivities, isDateMatch]);
+
+  const filteredTimeframeGrammar = React.useMemo(() => {
+    return grammarResults.filter(g => isDateMatch(g.createdAt));
+  }, [grammarResults, isDateMatch]);
+
+  const filteredTimeframeDownloads = React.useMemo(() => {
+    return safeDownloadLogs.filter(d => isDateMatch(d.timestamp));
+  }, [safeDownloadLogs, isDateMatch]);
+
+  // Combined Total Activity Feed for the selected timeframe
+  const unifiedActivitiesFeed = React.useMemo(() => {
+    const list: {
+      id: string;
+      category: 'Paper Created' | 'Quiz Completed' | 'Downloaded' | 'Live Activity';
+      title: string;
+      subtitle: string;
+      userName: string;
+      userEmail: string;
+      isGuest: boolean;
+      timestamp: string;
+      paperCode?: string;
+      badgeStyle: string;
+      paperObj?: GeneratedPaper;
+    }[] = [];
+
+    // 1. Papers Generated
+    savedPapers.forEach((p, idx) => {
+      if (!isDateMatch(p.createdAt)) return;
+      const email = p.generatedBy?.email || '';
+      const rawName = p.generatedBy?.name || '';
+      const isGuest = isGuestUser({ email, name: rawName });
+      const displayUser = isGuest ? formatGuestName(email, rawName) : (rawName || 'Student');
+      list.push({
+        id: `pap-${p.id}-${idx}`,
+        category: 'Paper Created',
+        title: p.config.title || p.subjectName || 'CBSE Question Paper',
+        subtitle: `${p.subjectName || 'CBSE'} • Class ${p.classLevel || '10'} • ${p.config.totalMarks || 80} Marks`,
+        userName: displayUser,
+        userEmail: isGuest ? `${displayUser.toLowerCase()}@examidea.internal` : (email || 'guest@examidea.internal'),
+        isGuest,
+        timestamp: p.createdAt,
+        paperCode: p.paperCode || p.id,
+        badgeStyle: 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800',
+        paperObj: p
+      });
+    });
+
+    // 2. Quiz / Grammar Submissions
+    grammarResults.forEach((g, idx) => {
+      if (!isDateMatch(g.createdAt)) return;
+      const email = g.userEmail || '';
+      const rawName = g.userName || '';
+      const isGuest = isGuestUser({ email, name: rawName });
+      const displayUser = isGuest ? formatGuestName(email, rawName) : (rawName || 'Student');
+      const pct = Math.round((g.score / (g.totalQuestions || 1)) * 100);
+      list.push({
+        id: `gram-${g.id}-${idx}`,
+        category: 'Quiz Completed',
+        title: g.topicTitle || 'Grammar Test',
+        subtitle: `Score: ${g.score}/${g.totalQuestions} (${pct}%) • Class 5th-8th`,
+        userName: displayUser,
+        userEmail: isGuest ? `${displayUser.toLowerCase()}@examidea.internal` : (email || 'guest@examidea.internal'),
+        isGuest,
+        timestamp: g.createdAt,
+        badgeStyle: 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800'
+      });
+    });
+
+    // 3. Download Logs
+    safeDownloadLogs.forEach((d, idx) => {
+      if (!isDateMatch(d.timestamp)) return;
+      const email = d.userEmail || '';
+      const rawName = d.userName || '';
+      const isGuest = isGuestUser({ email, name: rawName });
+      const displayUser = isGuest ? formatGuestName(email, rawName) : (rawName || 'Student');
+      list.push({
+        id: `dl-${d.id}-${idx}`,
+        category: 'Downloaded',
+        title: d.paperTitle || 'Downloaded Paper',
+        subtitle: `${d.subject || 'CBSE'} • Paper Code: ${d.paperCode}`,
+        userName: displayUser,
+        userEmail: isGuest ? `${displayUser.toLowerCase()}@examidea.internal` : (email || 'guest@examidea.internal'),
+        isGuest,
+        timestamp: d.timestamp,
+        paperCode: d.paperCode,
+        badgeStyle: 'bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-800'
+      });
+    });
+
+    // 4. Firestore Activities
+    effectiveActivities.forEach((act, idx) => {
+      if (!isDateMatch(act.timestamp)) return;
+      if (act.activityType === 'paper_generated' || act.activityType === 'quiz_submitted') return;
+      const email = act.studentEmail || '';
+      const rawName = act.studentName || '';
+      const isGuest = isGuestUser({ email, name: rawName });
+      const displayUser = isGuest ? formatGuestName(email, rawName) : (rawName || 'Student');
+      list.push({
+        id: `act-${act.id || idx}-${act.timestamp}`,
+        category: 'Live Activity',
+        title: act.paperTitle || act.activityType.replace(/_/g, ' ').toUpperCase(),
+        subtitle: `${act.subject || 'General'} • Activity: ${act.activityType}`,
+        userName: displayUser,
+        userEmail: isGuest ? `${displayUser.toLowerCase()}@examidea.internal` : (email || 'guest@examidea.internal'),
+        isGuest,
+        timestamp: act.timestamp,
+        paperCode: act.paperCode,
+        badgeStyle: 'bg-purple-100 dark:bg-purple-950/80 text-purple-900 dark:text-purple-200 border-purple-300 dark:border-purple-800'
+      });
+    });
+
+    return list.sort((a, b) => sortByTime(a.timestamp, b.timestamp));
+  }, [savedPapers, grammarResults, safeDownloadLogs, effectiveActivities, isDateMatch, isGuestUser, sortByTime]);
+
+  const timeframeActiveUsers = React.useMemo(() => {
+    const set = new Set<string>();
+    unifiedActivitiesFeed.forEach(a => set.add(a.userName));
+    return set.size;
+  }, [unifiedActivitiesFeed]);
   const uniqueLogUsers = React.useMemo(() => {
     const map = new Map<string, { email: string; name: string }>();
-    downloadLogs.forEach(l => {
+    safeDownloadLogs.forEach(l => {
       const email = l.userEmail || '';
       const key = email.toLowerCase().trim();
       if (key && !map.has(key)) {
@@ -1106,7 +1270,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     });
 
     return Array.from(map.values());
-  }, [downloadLogs, masterUsersList]);
+  }, [safeDownloadLogs, masterUsersList]);
 
   const filteredUsers = masterUsersList
     .filter(u => {
@@ -1132,7 +1296,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     })
     .sort((a, b) => sortByTime(a.createdAt || a.lastDownloadDate, b.createdAt || b.lastDownloadDate));
 
-  const filteredLogs = downloadLogs
+  const filteredLogs = safeDownloadLogs
     .filter(l => {
       const matchesDate = isDateMatch(l.timestamp);
       if (!matchesDate) return false;
@@ -1551,9 +1715,25 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               {totalDownloads}
             </span>
           </button>
+
+          <button
+            onClick={() => setMainTab('feedbacks')}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              mainTab === 'feedbacks'
+                ? 'bg-amber-700 text-white shadow-md shadow-amber-900/20'
+                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-emerald-300" />
+            <span>Feedbacks & Ideas</span>
+            <span className="bg-emerald-900/40 text-emerald-200 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+              {feedbacksList.length}
+            </span>
+          </button>
         </div>
 
         {/* Tier-2 Sub-Navigation Pills & Universal Date/Time Filter Bar */}
+        {mainTab !== 'feedbacks' && (
         <div className="px-4 sm:px-6 py-2.5 bg-stone-100/90 dark:bg-stone-900/90 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Left: Context-specific Sub-Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -1679,7 +1859,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   }`}
                 >
                   <Download className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Download Logs ({downloadLogs.length})</span>
+                  <span>Download Logs ({safeDownloadLogs.length})</span>
                 </button>
 
                 <button
@@ -1698,6 +1878,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           </div>
 
           {/* Right: Smart Date & Time Filter Bar */}
+          {(mainTab === 'overview' || mainTab === 'logs' || (mainTab === 'content' && contentSubTab === 'papers')) && (
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <div className="flex items-center gap-1 bg-white dark:bg-stone-800/90 p-1 rounded-xl border border-stone-300 dark:border-stone-700 shadow-2xs">
               <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 px-1.5 flex items-center gap-1">
@@ -1778,7 +1959,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </button>
             )}
           </div>
+          )}
         </div>
+        )}
 
         {/* Action feedback banner */}
         {actionSuccess && (
@@ -1793,260 +1976,343 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Metric Cards */}
+              {/* Clean Overview Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-amber-600" />
+                    <span>System Overview & Activity Summary</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Live system metrics, papers generated, quizzes, and recent downloads.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-bold">
+                  {(['all', 'today', 'yesterday', '7days', '30days'] as DatePreset[]).map((preset) => {
+                    const labels: Record<DatePreset, string> = {
+                      all: 'All Time',
+                      today: 'Today',
+                      yesterday: 'Yesterday',
+                      '7days': '7 Days',
+                      '30days': '30 Days',
+                      custom: 'Custom'
+                    };
+                    const isActive = datePreset === preset;
+                    return (
+                      <button
+                        key={`ov-preset-${preset}`}
+                        onClick={() => setDatePreset(preset)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700'
+                        }`}
+                      >
+                        {labels[preset]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Dynamic Timeframe Metric Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div
                   onClick={() => setActiveTab('papers')}
-                  className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-5 rounded-2xl cursor-pointer hover:border-amber-400 transition-all shadow-2xs"
+                  className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 p-5 rounded-2xl cursor-pointer hover:border-amber-500 transition-all shadow-2xs group"
                 >
-                  <span className="text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block">
-                    Saved Papers in Control Panel
+                  <span className="text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider block">
+                    📄 Papers Generated
                   </span>
                   <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-3xl font-black text-amber-950 dark:text-amber-100">{savedPapers.length}</span>
-                    <FileText className="w-6 h-6 text-amber-600" />
+                    <span className="text-3xl font-black text-amber-950 dark:text-amber-100">
+                      {filteredTimeframePapers.length}
+                    </span>
+                    <FileText className="w-6 h-6 text-amber-600 group-hover:scale-110 transition-transform" />
                   </div>
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400/80 mt-1 font-bold">1-Click Saved Paper View →</p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 font-bold">
+                    View saved papers for this timeframe →
+                  </p>
                 </div>
 
                 <div
-                  onClick={() => setActiveTab('users')}
-                  className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-5 rounded-2xl cursor-pointer hover:border-emerald-400 transition-all shadow-2xs"
+                  onClick={() => setActiveTab('content')}
+                  className="bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-5 rounded-2xl cursor-pointer hover:border-emerald-500 transition-all shadow-2xs group"
                 >
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
-                    Total Registered Students
+                  <span className="text-[11px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
+                    🎯 Quizzes & Tests Played
                   </span>
                   <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-3xl font-black text-emerald-950 dark:text-emerald-100">{totalStudents}</span>
-                    <Users className="w-6 h-6 text-emerald-600" />
+                    <span className="text-3xl font-black text-emerald-950 dark:text-emerald-100">
+                      {filteredTimeframeGrammar.length + filteredTimeframeActivities.length}
+                    </span>
+                    <GraduationCap className="w-6 h-6 text-emerald-600 group-hover:scale-110 transition-transform" />
                   </div>
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400/80 mt-1 font-bold">Manage Drop Box Limits →</p>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-bold">
+                    Includes 5th-8th & Board tests →
+                  </p>
                 </div>
 
                 <div
                   onClick={() => setActiveTab('logs')}
-                  className="bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-5 rounded-2xl cursor-pointer hover:border-blue-400 transition-all shadow-2xs"
+                  className="bg-blue-50/90 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800 p-5 rounded-2xl cursor-pointer hover:border-blue-500 transition-all shadow-2xs group"
                 >
-                  <span className="text-[11px] font-bold text-blue-800 dark:text-blue-400 uppercase tracking-wider block">
-                    Total Download Logs
+                  <span className="text-[11px] font-black text-blue-800 dark:text-blue-400 uppercase tracking-wider block">
+                    📥 Downloads Logged
                   </span>
                   <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-3xl font-black text-blue-950 dark:text-blue-100">{totalDownloads}</span>
-                    <Download className="w-6 h-6 text-blue-600" />
+                    <span className="text-3xl font-black text-blue-950 dark:text-blue-100">
+                      {filteredTimeframeDownloads.length}
+                    </span>
+                    <Download className="w-6 h-6 text-blue-600 group-hover:scale-110 transition-transform" />
                   </div>
-                  <p className="text-[11px] text-blue-700 dark:text-blue-400/80 mt-1">Live Download Logs & CSV Export</p>
+                  <p className="text-[11px] text-blue-700 dark:text-blue-400 mt-1 font-bold">
+                    View download audit logs →
+                  </p>
                 </div>
 
-                <div className="bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 p-5 rounded-2xl">
-                  <span className="text-[11px] font-bold text-purple-800 dark:text-purple-400 uppercase tracking-wider block">
-                    Admin Privileges
+                <div
+                  onClick={() => setActiveTab('users')}
+                  className="bg-purple-50/90 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-800 p-5 rounded-2xl cursor-pointer hover:border-purple-500 transition-all shadow-2xs group"
+                >
+                  <span className="text-[11px] font-black text-purple-800 dark:text-purple-400 uppercase tracking-wider block">
+                    👤 Active Students
                   </span>
                   <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-2xl font-black text-purple-950 dark:text-purple-100">Unlimited (∞)</span>
-                    <Crown className="w-6 h-6 text-purple-600" />
+                    <span className="text-3xl font-black text-purple-950 dark:text-purple-100">
+                      {timeframeActiveUsers}
+                    </span>
+                    <Users className="w-6 h-6 text-purple-600 group-hover:scale-110 transition-transform" />
                   </div>
-                  <p className="text-[11px] text-purple-700 dark:text-purple-400/80 mt-1">Master Control Active</p>
+                  <p className="text-[11px] text-purple-700 dark:text-purple-400 mt-1 font-bold">
+                    Includes Guest-001 ID tracking →
+                  </p>
                 </div>
               </div>
 
-              {/* Saved Papers Preview Section */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-stone-600 dark:text-stone-400 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-amber-600" />
-                    <span>Saved Papers in Admin Panel ({savedPapers.length})</span>
-                  </h4>
-                  <button
-                    onClick={() => setActiveTab('papers')}
-                    className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1"
-                  >
-                    <span>View All Saved Papers in 1-Click</span> →
-                  </button>
+              {/* Unified 1-Click Total Activity Feed Table */}
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden shadow-sm space-y-3">
+                <div className="p-4 bg-stone-50 dark:bg-stone-800/80 border-b border-stone-200 dark:border-stone-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                      <Activity className="w-4 h-4 text-amber-600" />
+                      <span>Total Activity Log Feed ({unifiedActivitiesFeed.length} records)</span>
+                    </h4>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                      Shows all actions taken during the selected timeframe with persistent Guest user IDs.
+                    </p>
+                  </div>
+
+                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                    Showing: {datePreset.toUpperCase()}
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {savedPapers.slice(0, 4).map((paper, idx) => (
-                    <div
-                      key={`admin-overview-paper-${paper.id}-${idx}`}
-                      onClick={() => {
-                        if (onSelectPaper) {
-                          onSelectPaper(paper);
-                          onClose();
-                        }
-                      }}
-                      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 p-4 rounded-2xl hover:border-amber-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
-                    >
-                      <div>
-                        <span className="font-mono text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 font-extrabold px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800">
-                          {paper.paperCode || 'CBSE-PAPER'}
-                        </span>
-                        <h5 className="text-xs font-bold text-stone-900 dark:text-white mt-1 group-hover:text-amber-600 transition-colors line-clamp-1">
-                          {paper.config.title || paper.subjectName}
-                        </h5>
-                        <p className="text-[11px] text-stone-500 font-medium">
-                          Generated by: <span className="font-semibold text-emerald-700 dark:text-emerald-400">{paper.generatedBy?.name || 'Guest'}</span> ({paper.generatedBy?.email || 'N/A'})
-                        </p>
-                      </div>
+                {unifiedActivitiesFeed.length === 0 ? (
+                  <div className="p-10 text-center text-stone-500 space-y-2">
+                    <Calendar className="w-8 h-8 text-stone-400 mx-auto opacity-50" />
+                    <p className="font-bold text-xs">Is chuni gayi tarikh me koi activity record nahi hai.</p>
+                    <p className="text-[11px]">Select "Today", "Yesterday", or "All Time" to view activities.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs min-w-[700px]">
+                      <thead className="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-bold border-b border-stone-200 dark:border-stone-700">
+                        <tr>
+                          <th className="p-3">Time & Date</th>
+                          <th className="p-3">Student / User</th>
+                          <th className="p-3">Event Type</th>
+                          <th className="p-3">Item Title / Action</th>
+                          <th className="p-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                        {unifiedActivitiesFeed.slice(0, 30).map((act) => {
+                          const dateStr = new Date(act.timestamp).toLocaleString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
 
-                      <button
-                        type="button"
-                        className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1 shrink-0 shadow-xs"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>1-Click View</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                          return (
+                            <tr key={act.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+                              <td className="p-3 whitespace-nowrap font-mono text-[11px] text-stone-500 dark:text-stone-400">
+                                {dateStr}
+                              </td>
+
+                              <td className="p-3 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white ${
+                                    act.isGuest ? 'bg-purple-600' : 'bg-emerald-600'
+                                  }`}>
+                                    {act.userName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="font-extrabold text-stone-900 dark:text-stone-100 flex items-center gap-1">
+                                      <span>{act.userName}</span>
+                                      {act.isGuest && (
+                                        <span className="text-[9px] bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 rounded border border-purple-300">
+                                          GUEST
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-stone-400 font-mono">{act.userEmail}</div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="p-3 whitespace-nowrap">
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${act.badgeStyle}`}>
+                                  {act.category}
+                                </span>
+                              </td>
+
+                              <td className="p-3">
+                                <div className="font-bold text-stone-800 dark:text-stone-200 line-clamp-1">
+                                  {act.title}
+                                </div>
+                                <div className="text-[10px] text-stone-500 font-medium">
+                                  {act.subtitle}
+                                </div>
+                              </td>
+
+                              <td className="p-3 text-right whitespace-nowrap">
+                                {act.paperObj ? (
+                                  <button
+                                    onClick={() => {
+                                      if (onSelectPaper && act.paperObj) {
+                                        onSelectPaper(act.paperObj);
+                                        onClose();
+                                      }
+                                    }}
+                                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 ml-auto shadow-xs cursor-pointer"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View Paper</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-stone-400 font-bold">Logged</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* TAB 2: SAVED PAPERS (सुरक्षित पेपर) */}
+          {/* TAB 2: SAVED PAPERS */}
           {activeTab === 'papers' && (
-            <div className="space-y-6">
-              {/* User Generation Stats Header */}
-              <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 sm:p-5 rounded-2xl space-y-3">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-black text-amber-950 dark:text-amber-200 uppercase tracking-wider flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-amber-600" />
-                      Paper Generation Summary by User (किसने कितने पेपर बनाए)
-                    </h3>
-                    <p className="text-xs text-amber-800 dark:text-amber-300/80 mt-0.5">
-                      एडमिन कंट्रोल पैनल में सुरक्षित सभी पेपर्स का पूरा रिकॉर्ड। किसी भी यूज़र पर क्लिक करके उनके पेपर्स फ़िल्टर करें।
-                    </p>
-                  </div>
-
-                  <span className="bg-amber-200 dark:bg-amber-900 text-amber-950 dark:text-amber-100 font-black text-xs px-3 py-1 rounded-full border border-amber-300 dark:border-amber-700">
-                    Total Saved: {savedPapers.length}
-                  </span>
+            <div className="space-y-4">
+              {/* Clean Papers Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-amber-600" />
+                    <span>Saved Question Papers ({filteredPapers.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    System me banaye gaye sabhi test papers ka record.
+                  </p>
                 </div>
 
-                {/* User Cards / Chips */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
+                {(paperClassFilter !== 'all' || paperSubjectFilter !== 'all' || paperMarksFilter !== 'all' || paperUserFilter !== 'all' || paperSearch !== '') && (
                   <button
-                    onClick={() => setPaperUserFilter('all')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      paperUserFilter === 'all'
-                        ? 'bg-amber-700 text-white shadow-sm'
-                        : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-800 hover:bg-stone-100'
-                    }`}
+                    onClick={() => {
+                      setPaperClassFilter('all');
+                      setPaperSubjectFilter('all');
+                      setPaperMarksFilter('all');
+                      setPaperUserFilter('all');
+                      setPaperSearch('');
+                    }}
+                    className="text-xs text-amber-700 dark:text-amber-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    <span>All Users ({savedPapers.length} Papers)</span>
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Filters</span>
                   </button>
-
-                  {Object.values(userPaperStats).map((stat: { name: string; email: string; count: number; papers: GeneratedPaper[] }, idx: number) => (
-                    <button
-                      key={`user-stat-chip-${stat.email}-${idx}`}
-                      onClick={() => setPaperUserFilter(stat.email)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        paperUserFilter === stat.email
-                          ? 'bg-amber-700 text-white shadow-sm'
-                          : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-800 hover:bg-stone-100'
-                      }`}
-                    >
-                      <span className="font-semibold">{stat.name}:</span>
-                      <span className="bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1.5 py-0.2 rounded font-black">
-                        {stat.count}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                )}
               </div>
 
-              {/* Class, Subject & Marks Filter Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-stone-100 dark:bg-stone-800/60 p-3 rounded-2xl border border-stone-200 dark:border-stone-700">
-                {/* 1. Class Filter */}
-                <div className="flex items-center gap-2">
-                  <Filter className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">Class:</span>
-                  <select
-                    value={paperClassFilter}
-                    onChange={e => setPaperClassFilter(e.target.value)}
-                    className="flex-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-bold focus:outline-amber-600 cursor-pointer"
-                  >
-                    <option value="all">All Classes (सभी कक्षाएं)</option>
-                    <option value="12">Class 12</option>
-                    <option value="11">Class 11</option>
-                    <option value="10">Class 10</option>
-                    <option value="9">Class 9</option>
-                    <option value="8">Class 8</option>
-                    <option value="7">Class 7</option>
-                    <option value="6">Class 6</option>
-                    <option value="5">Class 5</option>
-                    <option value="4">Class 4</option>
-                    <option value="3">Class 3</option>
-                  </select>
-                </div>
-
-                {/* 2. Subject Filter */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">Subject:</span>
-                  <select
-                    value={paperSubjectFilter}
-                    onChange={e => setPaperSubjectFilter(e.target.value)}
-                    className="flex-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-bold focus:outline-amber-600 cursor-pointer"
-                  >
-                    <option value="all">All Subjects (सभी विषय)</option>
-                    {availableSubjects.map((sub, idx) => (
-                      <option key={`sub-opt-${idx}`} value={sub}>
-                        {sub}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 3. Marks Filter */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">Marks:</span>
-                  <select
-                    value={paperMarksFilter}
-                    onChange={e => setPaperMarksFilter(e.target.value)}
-                    className="flex-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-bold focus:outline-amber-600 cursor-pointer"
-                  >
-                    <option value="all">All Marks (सभी अंक)</option>
-                    {availableMarks.map((m, idx) => (
-                      <option key={`marks-opt-${idx}`} value={String(m)}>
-                        {m} Marks
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Search Bar for Saved Papers */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-96">
-                  <Search className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+              {/* Clean Filter Controls: Search, Class, Subject, Marks, User */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
                   <input
                     type="text"
                     value={paperSearch}
                     onChange={e => setPaperSearch(e.target.value)}
-                    placeholder="Search paper by title, code, subject, or creator..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600"
+                    placeholder="Search paper or user..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600 font-medium"
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {(paperClassFilter !== 'all' || paperSubjectFilter !== 'all' || paperMarksFilter !== 'all' || paperUserFilter !== 'all' || paperSearch !== '') && (
-                    <button
-                      onClick={() => {
-                        setPaperClassFilter('all');
-                        setPaperSubjectFilter('all');
-                        setPaperMarksFilter('all');
-                        setPaperUserFilter('all');
-                        setPaperSearch('');
-                      }}
-                      className="text-xs text-amber-700 dark:text-amber-400 font-bold hover:underline cursor-pointer"
-                    >
-                      Reset Filters
-                    </button>
-                  )}
-                  <span className="text-xs text-stone-500 font-medium">
-                    Showing {filteredPapers.length} of {savedPapers.length} papers
-                  </span>
-                </div>
+                {/* 1. Class Filter */}
+                <select
+                  value={paperClassFilter}
+                  onChange={e => setPaperClassFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Classes</option>
+                  <option value="12">Class 12</option>
+                  <option value="11">Class 11</option>
+                  <option value="10">Class 10</option>
+                  <option value="9">Class 9</option>
+                  <option value="8">Class 8</option>
+                  <option value="7">Class 7</option>
+                  <option value="6">Class 6</option>
+                  <option value="5">Class 5</option>
+                  <option value="4">Class 4</option>
+                  <option value="3">Class 3</option>
+                </select>
+
+                {/* 2. Subject Filter */}
+                <select
+                  value={paperSubjectFilter}
+                  onChange={e => setPaperSubjectFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Subjects</option>
+                  {availableSubjects.map((sub, idx) => (
+                    <option key={`sub-opt-${idx}`} value={sub}>
+                      {sub}
+                    </option>
+                  ))}
+                </select>
+
+                {/* 3. Marks Filter */}
+                <select
+                  value={paperMarksFilter}
+                  onChange={e => setPaperMarksFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Marks</option>
+                  {availableMarks.map((m, idx) => (
+                    <option key={`marks-opt-${idx}`} value={String(m)}>
+                      {m} Marks
+                    </option>
+                  ))}
+                </select>
+
+                {/* 4. User Filter */}
+                <select
+                  value={paperUserFilter}
+                  onChange={e => setPaperUserFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer truncate"
+                >
+                  <option value="all">All Users ({savedPapers.length} Papers)</option>
+                  {Object.values(userPaperStats).map((stat: { name: string; email: string; count: number }, idx: number) => (
+                    <option key={`usr-flt-${stat.email}-${idx}`} value={stat.email}>
+                      {stat.name} ({stat.count})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Saved Papers Table & Mobile Cards */}
@@ -2235,60 +2501,74 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: STUDENTS & QUOTA DROP BOX MANAGER */}
+          {/* TAB 3: STUDENTS & QUOTA MANAGER */}
           {activeTab === 'users' && (
-            <div className="space-y-6">
-              {/* PRIMARY OWNER UNLIMITED VIP GRANT CARD */}
-              <div className="bg-gradient-to-r from-amber-900 via-amber-800 to-stone-900 text-white p-5 rounded-2xl border border-amber-700 shadow-md space-y-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-amber-700/60 pb-3">
-                  <div>
-                    <h3 className="text-sm font-black text-amber-200 uppercase tracking-wider flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      Primary Owner Power: Unlimited Paper Generation & Download VIP Grant
-                    </h3>
-                    <p className="text-xs text-amber-100/80 mt-0.5">
-                      किसी भी यूज़र की ईमेल दर्ज करके उसे असीमित पेपर बनाने व डाउनलोड करने की छूट दें। (केवल असीमित जनरेशन की छूट - एडमिन पैनल अधिकार नहीं दिया जाएगा)।
-                    </p>
-                  </div>
-                  <span className="bg-amber-400/20 text-amber-200 border border-amber-300/40 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase shrink-0">
-                    VIP Unlimited Granted
-                  </span>
+            <div className="space-y-4">
+              {/* Clean Users Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-amber-600" />
+                    <span>Student Accounts & Usage Quotas ({totalStudents})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Email aur Guest student accounts ki limits aur permissions manage karein.
+                  </p>
                 </div>
 
-                {/* VIP Email Input Form */}
-                <form onSubmit={handleGrantVip} className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="email"
-                    required
-                    value={vipEmailInput}
-                    onChange={e => setVipEmailInput(e.target.value)}
-                    placeholder="Enter student / user email (e.g. rahul@gmail.com)..."
-                    className="flex-1 text-xs p-3 rounded-xl border border-amber-600/80 bg-stone-900/90 text-white focus:outline-amber-400 placeholder:text-stone-400"
-                  />
+                <div className="flex items-center gap-2">
                   <button
-                    type="submit"
-                    className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-black px-5 py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+                    type="button"
+                    onClick={() => setShowVipModal(!showVipModal)}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Zap className="w-4 h-4 fill-amber-950" />
-                    <span>Grant Unlimited Access (असीमित पावर दें)</span>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>VIP Unlimited Access ({unlimitedVipEmails.length})</span>
                   </button>
-                </form>
+                </div>
+              </div>
 
-                {/* List of Users with Granted Unlimited VIP Access */}
-                {unlimitedVipEmails.length > 0 && (
-                  <div className="pt-2 space-y-2">
-                    <span className="text-[11px] font-bold text-amber-200 uppercase tracking-wider block">
-                      Users Granted Unlimited Papers & Downloads Access ({unlimitedVipEmails.length}):
+              {/* Expandable VIP Grant Bar */}
+              {showVipModal && (
+                <div className="bg-stone-50 dark:bg-stone-850 p-3.5 rounded-2xl border border-amber-300 dark:border-amber-800/60 space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      Grant Unlimited Generation & Downloads
                     </span>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setShowVipModal(false)}
+                      className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleGrantVip} className="flex gap-2">
+                    <input
+                      type="email"
+                      required
+                      value={vipEmailInput}
+                      onChange={e => setVipEmailInput(e.target.value)}
+                      placeholder="Enter user email to grant unlimited access..."
+                      className="flex-1 text-xs py-2 px-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Grant Unlimited</span>
+                    </button>
+                  </form>
+                  {unlimitedVipEmails.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
                       {unlimitedVipEmails.map((vipEmail, idx) => (
                         <div
                           key={`vip-chip-${vipEmail}-${idx}`}
-                          className="bg-amber-950/80 border border-amber-600/60 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 font-bold text-amber-200 shadow-2xs"
+                          className="bg-white dark:bg-stone-900 border border-amber-200 dark:border-amber-800/80 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5"
                         >
-                          <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                          <Crown className="w-3 h-3 text-amber-500" />
                           <span>{vipEmail}</span>
-                          <span className="text-[10px] text-emerald-400 font-extrabold">∞ Unlimited</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -2296,82 +2576,68 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               setActionSuccess(`Revoked Unlimited VIP Access for ${vipEmail}`);
                               setTimeout(() => setActionSuccess(null), 3000);
                             }}
-                            className="text-amber-400 hover:text-red-400 hover:bg-red-950/60 p-1 rounded transition-colors cursor-pointer ml-1"
-                            title="Revoke Unlimited Access"
+                            className="text-stone-400 hover:text-red-600 cursor-pointer ml-1"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="w-3 h-3" />
                           </button>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
-              <div className="bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xs font-black text-emerald-950 dark:text-emerald-200 uppercase tracking-wider flex items-center gap-2">
-                    <Users className="w-4 h-4 text-emerald-600" />
-                    <span>Student Roster & Limit Manager (ईमेल व गेस्ट छात्र डेटा प्रबंधन)</span>
-                  </h3>
-                  <p className="text-xs text-emerald-800 dark:text-emerald-300/80 mt-0.5">
-                    ईमेल लॉगिन और गेस्ट लॉगिन वाले छात्रों का डेटा अलग-अलग देखें व ड्रॉप बॉक्स से लिमिट बदलें।
-                  </p>
+              {/* Clean Filter and Search Row */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-1 bg-stone-100 dark:bg-stone-800/80 p-1 rounded-xl border border-stone-200 dark:border-stone-700 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setStudentCategoryFilter('all')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      studentCategoryFilter === 'all'
+                        ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-900 dark:hover:text-stone-100'
+                    }`}
+                  >
+                    <span>All Accounts ({totalStudents})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStudentCategoryFilter('email')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      studentCategoryFilter === 'email'
+                        ? 'bg-white dark:bg-stone-700 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-900 dark:hover:text-stone-100'
+                    }`}
+                  >
+                    <Mail className="w-3 h-3 text-emerald-500" />
+                    <span>Email ({emailStudentsCount})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStudentCategoryFilter('guest')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      studentCategoryFilter === 'guest'
+                        ? 'bg-white dark:bg-stone-700 text-purple-700 dark:text-purple-300 shadow-xs'
+                        : 'text-stone-500 hover:text-stone-900 dark:hover:text-stone-100'
+                    }`}
+                  >
+                    <UserX className="w-3 h-3 text-purple-500" />
+                    <span>Guest ({guestStudentsCount})</span>
+                  </button>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                  {/* Category Switcher Pills */}
-                  <div className="flex items-center gap-1 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
-                    <button
-                      type="button"
-                      onClick={() => setStudentCategoryFilter('all')}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                        studentCategoryFilter === 'all'
-                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-extrabold shadow-xs'
-                          : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-                      }`}
-                    >
-                      <Users className="w-3 h-3" />
-                      <span>All ({totalStudents})</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setStudentCategoryFilter('email')}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                        studentCategoryFilter === 'email'
-                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 font-extrabold shadow-xs'
-                          : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-                      }`}
-                    >
-                      <Mail className="w-3 h-3 text-emerald-600" />
-                      <span>📧 Email Logins ({emailStudentsCount})</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setStudentCategoryFilter('guest')}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                        studentCategoryFilter === 'guest'
-                          ? 'bg-purple-100 dark:bg-purple-950 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-extrabold shadow-xs'
-                          : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-                      }`}
-                    >
-                      <UserX className="w-3 h-3 text-purple-600" />
-                      <span>👤 Guest Logins ({guestStudentsCount})</span>
-                    </button>
-                  </div>
-
-                  <div className="relative w-full sm:w-60">
-                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
-                    <input
-                      type="text"
-                      value={userSearch}
-                      onChange={e => setUserSearch(e.target.value)}
-                      placeholder="Search name or email..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-emerald-600"
-                    />
-                  </div>
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder="Search student by name or email..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600 font-medium"
+                  />
                 </div>
               </div>
 
@@ -2417,7 +2683,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 )}
                                 <div>
                                   <div className="font-bold text-stone-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                                    <span>{user.name}</span>
+                                    <span>{isGuestUser(user) ? formatGuestName(user.email, user.name) : user.name}</span>
                                     {isAdm && <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />}
                                     {isGuestUser(user) ? (
                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 flex items-center gap-1 shrink-0" title="Log in via Guest Session">
@@ -2562,51 +2828,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           {/* TAB 4: DOWNLOAD LOGS */}
           {activeTab === 'logs' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2 flex-1 w-full sm:w-auto">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
-                    <input
-                      type="text"
-                      value={logSearch}
-                      onChange={e => setLogSearch(e.target.value)}
-                      placeholder="Search logs by paper, subject or email..."
-                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600"
-                    />
-                  </div>
-
-                  {/* User Filter Dropdown for Download Logs */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-3 py-2 text-xs font-bold">
-                    <Users className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span className="text-stone-600 dark:text-stone-400 shrink-0">User:</span>
-                    <select
-                      value={logUserFilter}
-                      onChange={e => setLogUserFilter(e.target.value)}
-                      className="bg-transparent outline-none cursor-pointer max-w-[180px] truncate text-stone-800 dark:text-stone-200"
-                    >
-                      <option value="all">All Users ({uniqueLogUsers.length})</option>
-                      {uniqueLogUsers.map((u, i) => (
-                        <option key={`log-usr-opt-${u.email}-${i}`} value={u.email}>
-                          {u.name} ({u.email})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Category Login Type Filter Dropdown */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-3 py-2 text-xs font-bold">
-                    <Filter className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span className="text-stone-600 dark:text-stone-400 shrink-0">Login Type:</span>
-                    <select
-                      value={logUserTypeFilter}
-                      onChange={e => setLogUserTypeFilter(e.target.value as 'all' | 'email' | 'guest')}
-                      className="bg-transparent outline-none cursor-pointer text-stone-800 dark:text-stone-200"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="email">📧 Email Logins Only</option>
-                      <option value="guest">👤 Guest Logins Only</option>
-                    </select>
-                  </div>
+              {/* Clean Logs Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <History className="w-5 h-5 text-amber-600" />
+                    <span>Download & Generation Logs ({filteredLogs.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Students ke dwara papers download aur view karne ki history.
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -2615,17 +2846,56 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Export CSV Spreadsheet</span>
+                    <span>Export CSV</span>
                   </button>
 
                   <button
-                    onClick={clearDownloadLogs}
-                    className="flex items-center gap-1.5 bg-stone-100 hover:bg-red-50 text-stone-600 hover:text-red-700 border border-stone-200 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    onClick={handleClearDownloadLogs}
+                    className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 hover:bg-red-50 text-stone-600 dark:text-stone-300 hover:text-red-700 border border-stone-200 dark:border-stone-700 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear Logs</span>
+                    <span>Clear</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Controls: Search & Filters */}
+              <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
+                  <input
+                    type="text"
+                    value={logSearch}
+                    onChange={e => setLogSearch(e.target.value)}
+                    placeholder="Search logs by paper, subject or user email..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600"
+                  />
+                </div>
+
+                {/* User Filter Dropdown */}
+                <select
+                  value={logUserFilter}
+                  onChange={e => setLogUserFilter(e.target.value)}
+                  className="py-1.5 px-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer max-w-[200px] truncate"
+                >
+                  <option value="all">All Users ({uniqueLogUsers.length})</option>
+                  {uniqueLogUsers.map((u, i) => (
+                    <option key={`log-usr-opt-${u.email}-${i}`} value={u.email}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Login Type Filter Dropdown */}
+                <select
+                  value={logUserTypeFilter}
+                  onChange={e => setLogUserTypeFilter(e.target.value as 'all' | 'email' | 'guest')}
+                  className="py-1.5 px-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Login Types</option>
+                  <option value="email">Email Logins</option>
+                  <option value="guest">Guest Logins</option>
+                </select>
               </div>
 
               <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden shadow-xs">
@@ -2703,14 +2973,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
           {/* TAB 5: ADMIN ROSTER */}
           {activeTab === 'admins' && (
-            <div className="space-y-6">
-              <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 rounded-2xl">
-                <h4 className="text-xs font-black text-amber-950 dark:text-amber-200 uppercase tracking-wider mb-1">
-                  Manage Super Admin Emails (सह-प्रशासक सूची)
-                </h4>
-                <p className="text-xs text-amber-800 dark:text-amber-300/80">
-                  Any email in this list automatically inherits full Admin Master Privileges (Zero download limits & access to this panel).
-                </p>
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-amber-600" />
+                    <span>System Administrators ({adminEmails.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Admin control panel access aur privileges wale accounts.
+                  </p>
+                </div>
               </div>
 
               {/* Add New Admin Input */}
@@ -2780,131 +3053,106 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
           )}
 
-          {/* TAB 6: KIDS GRAMMAR 5TH - 8TH (यूज़र वाइज़ रिकॉर्ड) */}
+          {/* TAB 6: KIDS GRAMMAR 3RD - 8TH */}
           {activeTab === 'grammar' && (
-            <div className="space-y-6">
-              {/* Header & Userwise Summary Bar */}
-              <div className="bg-gradient-to-r from-emerald-900/90 via-teal-900/90 to-stone-900 text-white p-5 rounded-2xl border border-emerald-700/50 space-y-3 shadow-md">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-emerald-300 flex items-center gap-2">
-                      <GraduationCap className="w-5 h-5 text-emerald-400" />
-                      Kids English Grammar Test & Score Registry (Class 4th - 8th)
-                    </h3>
-                    <p className="text-xs text-emerald-100/80 mt-1">
-                      छात्रवार (Userwise) रिकॉर्ड - जानें किस छात्र ने कितने 4th to 8th ग्रामर टेस्ट्स दिए और क्या स्कोर पाया।
-                    </p>
-                  </div>
-
-                  <span className="bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 font-black text-xs px-3 py-1 rounded-full shrink-0">
-                    Total Tests Saved: {grammarResults.length}
-                  </span>
+            <div className="space-y-4">
+              {/* Clean Grammar Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-amber-600" />
+                    <span>Grammar Tests & Student Scores ({filteredGrammarResults.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Class 3rd to 8th grammar tests aur student results ka record.
+                  </p>
                 </div>
 
-                {/* User Filter Chips */}
-                <div className="space-y-1.5 pt-2 border-t border-emerald-800/60">
-                  <span className="text-[11px] font-bold text-emerald-200/90 uppercase tracking-wider block">
-                    Filter by Student (छात्र के अनुसार फ़िल्टर करें):
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => setGrammarUserFilter('all')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        grammarUserFilter === 'all'
-                          ? 'bg-emerald-400 text-stone-950 font-black shadow-sm'
-                          : 'bg-stone-900/80 text-emerald-100 border border-emerald-700/60 hover:bg-emerald-900/40'
-                      }`}
-                    >
-                      <span>All Students ({grammarResults.length} Tests)</span>
-                    </button>
-
-                    {(Object.values(userGrammarStats) as UserGrammarStat[]).map((stat, idx) => {
-                      const avgPct = stat.count > 0 ? Math.round((stat.totalScore / stat.totalMax) * 100) : 0;
-                      return (
-                        <button
-                          key={`grammar-user-chip-${stat.email}-${idx}`}
-                          onClick={() => setGrammarUserFilter(stat.email)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            grammarUserFilter === stat.email
-                              ? 'bg-emerald-400 text-stone-950 font-black shadow-sm'
-                              : 'bg-stone-900/80 text-emerald-100 border border-emerald-700/60 hover:bg-emerald-900/40'
-                          }`}
-                        >
-                          <span>{stat.name}:</span>
-                          <span className="bg-emerald-950 text-emerald-300 px-1.5 py-0.2 rounded text-[10px] font-black border border-emerald-700">
-                            {stat.count} Tests ({avgPct}% Avg)
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                {(grammarClassFilter !== 'all' || grammarTopicFilter !== 'all' || grammarDifficultyFilter !== 'all' || grammarUserFilter !== 'all' || grammarSearch !== '') && (
+                  <button
+                    onClick={() => {
+                      setGrammarClassFilter('all');
+                      setGrammarTopicFilter('all');
+                      setGrammarDifficultyFilter('all');
+                      setGrammarUserFilter('all');
+                      setGrammarSearch('');
+                    }}
+                    className="text-xs text-amber-700 dark:text-amber-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Filters</span>
+                  </button>
+                )}
               </div>
 
-              {/* Class, Topic, Difficulty & Search Filter Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 bg-stone-100 dark:bg-stone-800/60 p-3 rounded-2xl border border-stone-200 dark:border-stone-700">
-                {/* 1. Class Filter */}
-                <div className="flex items-center gap-2">
-                  <Filter className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">Class:</span>
-                  <select
-                    value={grammarClassFilter}
-                    onChange={e => setGrammarClassFilter(e.target.value)}
-                    className="flex-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-bold focus:outline-emerald-600 cursor-pointer"
-                  >
-                    <option value="all">All Classes (3rd - 8th)</option>
-                    <option value="3">Class 3rd</option>
-                    <option value="4">Class 4th</option>
-                    <option value="5">Class 5th</option>
-                    <option value="6">Class 6th</option>
-                    <option value="7">Class 7th</option>
-                    <option value="8">Class 8th</option>
-                  </select>
-                </div>
-
-                {/* 2. Topic Filter */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">Topic:</span>
-                  <select
-                    value={grammarTopicFilter}
-                    onChange={e => setGrammarTopicFilter(e.target.value)}
-                    className="flex-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-bold focus:outline-emerald-600 cursor-pointer"
-                  >
-                    <option value="all">All Grammar Topics</option>
-                    {GRAMMAR_TOPICS.filter(t => t !== 'All Topics (Mixed Test)').map((topic, idx) => (
-                      <option key={`g-topic-opt-${idx}`} value={topic}>
-                        {topic}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 3. Difficulty Filter */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 shrink-0">Level:</span>
-                  <select
-                    value={grammarDifficultyFilter}
-                    onChange={e => setGrammarDifficultyFilter(e.target.value)}
-                    className="flex-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-bold focus:outline-emerald-600 cursor-pointer"
-                  >
-                    <option value="all">All Difficulties</option>
-                    <option value="Easy">Easy Level</option>
-                    <option value="Medium">Medium Level</option>
-                    <option value="Hard">Hard Level</option>
-                  </select>
-                </div>
-
-                {/* 4. Search Bar */}
+              {/* Clean Filter Controls */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                {/* Search */}
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
                   <input
                     type="text"
                     value={grammarSearch}
                     onChange={e => setGrammarSearch(e.target.value)}
-                    placeholder="Search by Code, Student, Topic..."
-                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-emerald-600"
+                    placeholder="Search test or student..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-amber-600 font-medium"
                   />
                 </div>
+
+                {/* Class */}
+                <select
+                  value={grammarClassFilter}
+                  onChange={e => setGrammarClassFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Classes (3-8)</option>
+                  <option value="3">Class 3rd</option>
+                  <option value="4">Class 4th</option>
+                  <option value="5">Class 5th</option>
+                  <option value="6">Class 6th</option>
+                  <option value="7">Class 7th</option>
+                  <option value="8">Class 8th</option>
+                </select>
+
+                {/* Topic */}
+                <select
+                  value={grammarTopicFilter}
+                  onChange={e => setGrammarTopicFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer truncate"
+                >
+                  <option value="all">All Topics</option>
+                  {GRAMMAR_TOPICS.filter(t => t !== 'All Topics (Mixed Test)').map((topic, idx) => (
+                    <option key={`g-topic-opt-${idx}`} value={topic}>
+                      {topic}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Level */}
+                <select
+                  value={grammarDifficultyFilter}
+                  onChange={e => setGrammarDifficultyFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Levels</option>
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                </select>
+
+                {/* Student Filter */}
+                <select
+                  value={grammarUserFilter}
+                  onChange={e => setGrammarUserFilter(e.target.value)}
+                  className="py-1.5 px-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-bold focus:outline-amber-600 cursor-pointer truncate"
+                >
+                  <option value="all">All Students ({grammarResults.length} Tests)</option>
+                  {(Object.values(userGrammarStats) as UserGrammarStat[]).map((stat, idx) => (
+                    <option key={`g-usr-${stat.email}-${idx}`} value={stat.email}>
+                      {stat.name} ({stat.count} Tests)
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Test Cards List */}
@@ -3009,138 +3257,79 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
           {/* TAB: FIRESTORE ACTIVITY LOGS */}
           {activeTab === 'firestore' && (
-            <div className="space-y-6">
-              {/* Firestore Connection Banner & Live Sync Status */}
-              <div className="bg-gradient-to-r from-orange-950/80 via-amber-950/60 to-stone-900 border border-orange-600/40 rounded-2xl p-5 text-white shadow-md flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-orange-500/20 border border-orange-400/40 rounded-2xl flex items-center justify-center shrink-0">
-                    <Flame className="w-7 h-7 text-orange-400 animate-pulse" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-black tracking-tight text-white">Firebase Firestore Database Logs</h3>
-                      <span className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        Live Firestore Sync Active
-                      </span>
-                    </div>
-                    <p className="text-xs text-stone-300 mt-1">
-                      Real-time activity mapping: Unique Student IDs → Generated Paper IDs & Quiz Scores
-                    </p>
-                  </div>
+            <div className="space-y-4">
+              {/* Clean Firestore Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-orange-600" />
+                    <span>Firestore Database Logs ({filteredFirestoreActivities.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Real-time student activity aur generation logs from Firebase Firestore.
+                  </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleRefreshFirestoreData}
                   disabled={isFirestoreRefreshing || isFirestoreLoading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50 shrink-0"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isFirestoreRefreshing || isFirestoreLoading ? 'animate-spin' : ''}`} />
-                  <span>{isFirestoreRefreshing ? 'Refreshing...' : 'Refresh Firestore Data'}</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${isFirestoreRefreshing || isFirestoreLoading ? 'animate-spin' : ''}`} />
+                  <span>{isFirestoreRefreshing ? 'Refreshing...' : 'Refresh Data'}</span>
                 </button>
               </div>
 
-              {/* Firestore Stats Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-orange-50/80 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 p-4 rounded-2xl">
-                  <span className="text-[11px] font-bold text-orange-800 dark:text-orange-400 uppercase tracking-wider block">
-                    Total Logged Activities
-                  </span>
-                  <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-3xl font-black text-orange-950 dark:text-orange-100">{effectiveActivities.length}</span>
-                    <Database className="w-6 h-6 text-orange-600" />
-                  </div>
-                </div>
-
-                <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 rounded-2xl">
-                  <span className="text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block">
-                    Generated Paper Logs
-                  </span>
-                  <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-3xl font-black text-amber-950 dark:text-amber-100">
-                      {effectiveActivities.filter(a => a.activityType === 'paper_generated').length}
-                    </span>
-                    <FileText className="w-6 h-6 text-amber-600" />
-                  </div>
-                </div>
-
-                <div className="bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 rounded-2xl">
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
-                    Quiz Test Submissions
-                  </span>
-                  <div className="flex items-baseline justify-between mt-2">
-                    <span className="text-3xl font-black text-emerald-950 dark:text-emerald-100">
-                      {effectiveActivities.filter(a => a.activityType === 'quiz_submitted').length}
-                    </span>
-                    <Award className="w-6 h-6 text-emerald-600" />
-                  </div>
-                </div>
-              </div>
-
               {/* Filter Controls */}
-              <div className="bg-stone-50 dark:bg-stone-800/40 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 flex flex-wrap items-center justify-between gap-3">
-                <div className="relative flex-1 min-w-[220px]">
-                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={firestoreSearch}
                     onChange={(e) => setFirestoreSearch(e.target.value)}
-                    placeholder="Search by Student ID, Student Email, Paper ID, Code, Subject..."
-                    className="w-full bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl pl-9 pr-4 py-2 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none"
+                    placeholder="Search user, paper ID, subject..."
+                    className="w-full bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium focus:outline-amber-600"
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* User / Student Filter Dropdown */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5">
-                    <Users className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                    <span className="text-xs font-bold text-stone-600 dark:text-stone-400 shrink-0">User / Student:</span>
-                    <select
-                      value={firestoreUserFilter}
-                      onChange={(e) => setFirestoreUserFilter(e.target.value)}
-                      className="bg-transparent text-xs font-bold outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate text-stone-800 dark:text-stone-200"
-                    >
-                      <option value="all">All Users ({uniqueFirestoreUsers.length})</option>
-                      {uniqueFirestoreUsers.map((usr) => (
-                        <option key={`fs-usr-opt-${usr.id || usr.email}`} value={usr.email || usr.id}>
-                          {usr.name} ({usr.email || usr.id})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {/* User / Student Filter Dropdown */}
+                <select
+                  value={firestoreUserFilter}
+                  onChange={(e) => setFirestoreUserFilter(e.target.value)}
+                  className="bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-amber-600 cursor-pointer truncate"
+                >
+                  <option value="all">All Users ({uniqueFirestoreUsers.length})</option>
+                  {uniqueFirestoreUsers.map((usr) => (
+                    <option key={`fs-usr-opt-${usr.id || usr.email}`} value={usr.email || usr.id}>
+                      {usr.name} ({usr.email || usr.id})
+                    </option>
+                  ))}
+                </select>
 
-                  {/* Login Category Filter Dropdown */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5">
-                    <Filter className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                    <span className="text-xs font-bold text-stone-600 dark:text-stone-400 shrink-0">Login Type:</span>
-                    <select
-                      value={activityUserTypeFilter}
-                      onChange={(e) => setActivityUserTypeFilter(e.target.value as 'all' | 'email' | 'guest')}
-                      className="bg-transparent text-xs font-bold outline-none cursor-pointer text-stone-800 dark:text-stone-200"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="email">📧 Email Logins Only</option>
-                      <option value="guest">👤 Guest Logins Only</option>
-                    </select>
-                  </div>
+                {/* Login Category Filter Dropdown */}
+                <select
+                  value={activityUserTypeFilter}
+                  onChange={(e) => setActivityUserTypeFilter(e.target.value as 'all' | 'email' | 'guest')}
+                  className="bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Login Types</option>
+                  <option value="email">Email Logins</option>
+                  <option value="guest">Guest Logins</option>
+                </select>
 
-                  {/* Activity Type Dropdown */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5">
-                    <Filter className="w-3.5 h-3.5 text-stone-500 shrink-0" />
-                    <span className="text-xs font-bold text-stone-600 dark:text-stone-400 shrink-0">Type:</span>
-                    <select
-                      value={firestoreActivityFilter}
-                      onChange={(e) => setFirestoreActivityFilter(e.target.value as any)}
-                      className="bg-transparent text-xs font-bold outline-none cursor-pointer text-stone-800 dark:text-stone-200"
-                    >
-                      <option value="all">All Activities</option>
-                      <option value="paper_generated">Paper Generations</option>
-                      <option value="quiz_submitted">Quiz Submissions</option>
-                      <option value="user_login">User Logins</option>
-                    </select>
-                  </div>
-                </div>
+                {/* Activity Type Dropdown */}
+                <select
+                  value={firestoreActivityFilter}
+                  onChange={(e) => setFirestoreActivityFilter(e.target.value as any)}
+                  className="bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Activities</option>
+                  <option value="paper_generated">Paper Generations</option>
+                  <option value="quiz_submitted">Quiz Submissions</option>
+                  <option value="user_login">User Logins</option>
+                </select>
               </div>
 
               {/* Firestore Activity Records Table / Cards */}
@@ -3258,29 +3447,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
           {/* TAB 8: QUESTION IMPORTER (PDF / WORD / TEXT) */}
           {activeTab === 'importer' && (
-            <div className="space-y-6">
-              {/* Header card */}
-              <div className="bg-gradient-to-r from-sky-900 via-sky-800 to-stone-900 text-white p-6 rounded-3xl shadow-md border border-sky-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center shrink-0">
-                    <Database className="w-6 h-6 text-sky-300" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                      Admin Question Vault & AI File Importer
-                      <span className="bg-sky-400 text-stone-950 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
-                        Class 3rd to 12th
-                      </span>
-                    </h3>
-                    <p className="text-xs text-sky-200/80 mt-1 max-w-xl">
-                      Upload PDF, Word (.docx), or paste raw text. AI will automatically parse, classify into MCQs, Short & Long questions, and permanently store them on the server vault for paper generation.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-sky-950/80 border border-sky-600/40 px-4 py-2.5 rounded-2xl text-right">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 block">Server Vault Count</span>
-                  <span className="text-xl font-black text-white">{serverCustomQuestions.length} Questions Stored</span>
+            <div className="space-y-4">
+              {/* Clean Importer Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-sky-600" />
+                    <span>Question Vault & AI Importer ({serverCustomQuestions.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    PDF, Word (.docx) ya text se questions import aur classify karein.
+                  </p>
                 </div>
               </div>
 
@@ -3733,22 +3910,195 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
           )}
 
+          {/* TAB: FEEDBACKS & IMPROVEMENT IDEAS */}
+          {mainTab === 'feedbacks' && (
+            <div className="space-y-4">
+              {/* Clean Feedbacks Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-emerald-600" />
+                    <span>User Feedbacks & Suggestions ({feedbacksList.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Students aur teachers ke dwara submit kiye gaye sujhaav aur bug reports.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => fetchAllFeedbacks().then(data => setFeedbacksList(data))}
+                  className="px-3.5 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto border border-stone-200 dark:border-stone-700"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {/* Filters Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 flex-1 min-w-[200px] bg-stone-50 dark:bg-stone-800/80 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-stone-700">
+                  <Search className="w-4 h-4 text-stone-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={feedbackSearch}
+                    onChange={(e) => setFeedbackSearch(e.target.value)}
+                    placeholder="Search by user email, name, message..."
+                    className="w-full bg-transparent outline-none text-stone-900 dark:text-stone-100 font-medium"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={feedbackCategoryFilter}
+                    onChange={(e) => setFeedbackCategoryFilter(e.target.value)}
+                    className="bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold rounded-xl px-3 py-1.5 outline-none"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="feature_idea">Feature Ideas</option>
+                    <option value="bug">Bugs / Issues</option>
+                    <option value="wrong_question">Wrong Questions</option>
+                    <option value="general">General</option>
+                  </select>
+
+                  <select
+                    value={feedbackStatusFilter}
+                    onChange={(e) => setFeedbackStatusFilter(e.target.value)}
+                    className="bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold rounded-xl px-3 py-1.5 outline-none"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Feedback List */}
+              {(() => {
+                const filtered = feedbacksList.filter(item => {
+                  const matchCat = feedbackCategoryFilter === 'all' || item.category === feedbackCategoryFilter;
+                  const matchStatus = feedbackStatusFilter === 'all' || item.status === feedbackStatusFilter;
+                  const matchSearch = !feedbackSearch || 
+                    (item.message && item.message.toLowerCase().includes(feedbackSearch.toLowerCase())) ||
+                    (item.userEmail && item.userEmail.toLowerCase().includes(feedbackSearch.toLowerCase())) ||
+                    (item.userName && item.userName.toLowerCase().includes(feedbackSearch.toLowerCase()));
+                  return matchCat && matchStatus && matchSearch;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-12 text-center text-stone-500">
+                      <p className="font-bold text-sm">No feedbacks or suggestions found.</p>
+                      <p className="text-xs text-stone-400 mt-1">Users can submit feedback anytime using the bottom-left floating button.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filtered.map((fb) => (
+                      <div
+                        key={fb.id}
+                        className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                          fb.status === 'resolved'
+                            ? 'bg-stone-50 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800 opacity-80'
+                            : 'bg-white dark:bg-stone-900 border-emerald-500/30 shadow-md'
+                        }`}
+                      >
+                        <div className="space-y-2">
+                          {/* Header badges */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                              fb.category === 'bug'
+                                ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                                : fb.category === 'wrong_question'
+                                ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                                : fb.category === 'feature_idea'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-blue-100 text-blue-700 border border-blue-300'
+                            }`}>
+                              {fb.category.replace('_', ' ')}
+                            </span>
+
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map(s => (
+                                <Star
+                                  key={s}
+                                  className={`w-3.5 h-3.5 ${
+                                    fb.rating >= s ? 'fill-amber-400 text-amber-500' : 'text-stone-300 dark:text-stone-700'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Message */}
+                          <p className="text-xs font-medium text-stone-900 dark:text-stone-100 leading-relaxed whitespace-pre-wrap">
+                            "{fb.message}"
+                          </p>
+
+                          {/* Context */}
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-stone-500 dark:text-stone-400 pt-1">
+                            <span>Class {fb.classLevel || 'General'}</span>
+                            <span>•</span>
+                            <span>{fb.subject || 'General'}</span>
+                          </div>
+                        </div>
+
+                        {/* Footer Meta & Actions */}
+                        <div className="pt-3 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between gap-2 text-[11px]">
+                          <div>
+                            <span className="font-bold text-stone-800 dark:text-stone-200 block">{fb.userName || 'Anonymous'}</span>
+                            <span className="text-stone-400 text-[10px]">{fb.userEmail} • {new Date(fb.createdAt).toLocaleDateString()}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={async () => {
+                                const nextStatus = fb.status === 'resolved' ? 'pending' : 'resolved';
+                                await updateFeedbackStatus(fb.id, nextStatus);
+                                setFeedbacksList(prev => prev.map(f => f.id === fb.id ? { ...f, status: nextStatus } : f));
+                              }}
+                              className={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all cursor-pointer ${
+                                fb.status === 'resolved'
+                                  ? 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+                                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
+                              }`}
+                            >
+                              {fb.status === 'resolved' ? 'Mark Pending' : '✓ Mark Resolved'}
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                await deleteFeedbackItem(fb.id);
+                                setFeedbacksList(prev => prev.filter(f => f.id !== fb.id));
+                              }}
+                              className="p-1 rounded-lg text-stone-400 hover:text-rose-600 transition-colors"
+                              title="Delete Feedback"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* TAB: QUESTION BANK & PAPER SETS */}
           {activeTab === 'questionBank' && (
-            <div className="space-y-6">
-              {/* Top Banner & Action */}
-              <div className="bg-gradient-to-r from-purple-900 via-stone-900 to-indigo-950 p-6 rounded-3xl border border-purple-500/30 text-white shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-purple-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
-                      Direct Class & Exam Bank
-                    </span>
-                    <h3 className="text-lg font-black tracking-tight text-purple-100">
-                      Question Bank & Paper Sets Management (क्वेश्चन बैंक एवं पेपर सेट)
-                    </h3>
-                  </div>
-                  <p className="text-xs text-purple-200/80">
-                    कक्षा-वार एवं विषय-वार 10, 20, 40, 80 अंक के पूरे टेस्ट पेपर सेट बनाएं एवं मैनेज करें। छात्र व शिक्षक इन्हें सीधे एक्सेस कर सकते हैं।
+            <div className="space-y-4">
+              {/* Clean Question Bank Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-stone-800">
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-amber-600" />
+                    <span>Question Bank & Paper Sets ({filteredQbSets.length})</span>
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Class-wise and subject-wise ready test paper sets.
                   </p>
                 </div>
 
@@ -3757,87 +4107,79 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     resetQbForm();
                     setShowQbModal(true);
                   }}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
                 >
-                  <Plus className="w-4 h-4 text-purple-200" />
-                  <span>+ Create New Question Paper Set (नया पेपर सेट जोड़ें)</span>
+                  <Plus className="w-4 h-4" />
+                  <span>Create Paper Set</span>
                 </button>
               </div>
 
-              {/* Filter Bar */}
-              <div className="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-2xs space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {/* Search Title / Content */}
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
-                    <input
-                      type="text"
-                      placeholder="Search title, subject, content..."
-                      value={qbSearch}
-                      onChange={(e) => setQbSearch(e.target.value)}
-                      className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 pl-9 pr-3 py-2 rounded-xl text-xs font-medium text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-
-                  {/* Class Filter */}
-                  <div>
-                    <select
-                      value={qbClassFilter}
-                      onChange={(e) => setQbClassFilter(e.target.value)}
-                      className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-3 py-2 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-                    >
-                      <option value="all">All Classes (सभी कक्षाएं)</option>
-                      <option value="12">Class 12th Board</option>
-                      <option value="11">Class 11th Annual</option>
-                      <option value="10">Class 10th Board</option>
-                      <option value="9">Class 9th Annual</option>
-                      <option value="8">Class 8th</option>
-                      <option value="7">Class 7th</option>
-                      <option value="6">Class 6th</option>
-                    </select>
-                  </div>
-
-                  {/* Subject Filter */}
-                  <div>
-                    <select
-                      value={qbSubjectFilter}
-                      onChange={(e) => setQbSubjectFilter(e.target.value)}
-                      className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-3 py-2 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-                    >
-                      <option value="all">All Subjects (सभी विषय)</option>
-                      <option value="Science">Science (विज्ञान)</option>
-                      <option value="Mathematics">Mathematics (गणित)</option>
-                      <option value="Physics">Physics (भौतिकी)</option>
-                      <option value="Chemistry">Chemistry (रसायन विज्ञान)</option>
-                      <option value="Biology">Biology (जीव विज्ञान)</option>
-                      <option value="Social Science">Social Science (सामाजिक विज्ञान)</option>
-                      <option value="English">English</option>
-                      <option value="Hindi">Hindi (हिंदी)</option>
-                      <option value="Accountancy">Accountancy</option>
-                      <option value="Economics">Economics</option>
-                      <option value="Computer Science">Computer Science</option>
-                    </select>
-                  </div>
-
-                  {/* Marks Filter */}
-                  <div>
-                    <select
-                      value={qbMarksFilter}
-                      onChange={(e) => setQbMarksFilter(e.target.value)}
-                      className="w-full bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-3 py-2 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-                    >
-                      <option value="all">All Total Marks (10M - 100M)</option>
-                      <option value="10">10 Marks Test Set</option>
-                      <option value="20">20 Marks Unit Test Set</option>
-                      <option value="30">30 Marks Test Set</option>
-                      <option value="40">40 Marks Periodic Test Set</option>
-                      <option value="50">50 Marks Half-Yearly Set</option>
-                      <option value="70">70 Marks Theory Board Set</option>
-                      <option value="80">80 Marks Full Board Set</option>
-                      <option value="100">100 Marks Full Paper Set</option>
-                    </select>
-                  </div>
+              {/* Filter Controls */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                {/* Search Title / Content */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search sets by title or subject..."
+                    value={qbSearch}
+                    onChange={(e) => setQbSearch(e.target.value)}
+                    className="w-full bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 pl-9 pr-3 py-1.5 rounded-xl text-xs font-medium text-stone-900 dark:text-stone-100 focus:outline-amber-600"
+                  />
                 </div>
+
+                {/* Class Filter */}
+                <select
+                  value={qbClassFilter}
+                  onChange={(e) => setQbClassFilter(e.target.value)}
+                  className="w-full bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 px-3 py-1.5 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Classes</option>
+                  <option value="12">Class 12th Board</option>
+                  <option value="11">Class 11th Annual</option>
+                  <option value="10">Class 10th Board</option>
+                  <option value="9">Class 9th Annual</option>
+                  <option value="8">Class 8th</option>
+                  <option value="7">Class 7th</option>
+                  <option value="6">Class 6th</option>
+                </select>
+
+                {/* Subject Filter */}
+                <select
+                  value={qbSubjectFilter}
+                  onChange={(e) => setQbSubjectFilter(e.target.value)}
+                  className="w-full bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 px-3 py-1.5 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Subjects</option>
+                  <option value="Science">Science</option>
+                  <option value="Mathematics">Mathematics</option>
+                  <option value="Physics">Physics</option>
+                  <option value="Chemistry">Chemistry</option>
+                  <option value="Biology">Biology</option>
+                  <option value="Social Science">Social Science</option>
+                  <option value="English">English</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="Accountancy">Accountancy</option>
+                  <option value="Economics">Economics</option>
+                  <option value="Computer Science">Computer Science</option>
+                </select>
+
+                {/* Marks Filter */}
+                <select
+                  value={qbMarksFilter}
+                  onChange={(e) => setQbMarksFilter(e.target.value)}
+                  className="w-full bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 px-3 py-1.5 rounded-xl text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-amber-600 cursor-pointer"
+                >
+                  <option value="all">All Total Marks</option>
+                  <option value="10">10 Marks Test Set</option>
+                  <option value="20">20 Marks Unit Test Set</option>
+                  <option value="30">30 Marks Test Set</option>
+                  <option value="40">40 Marks Periodic Test Set</option>
+                  <option value="50">50 Marks Half-Yearly Set</option>
+                  <option value="70">70 Marks Theory Board Set</option>
+                  <option value="80">80 Marks Full Board Set</option>
+                  <option value="100">100 Marks Full Paper Set</option>
+                </select>
               </div>
 
               {/* Question Bank Paper Sets List */}

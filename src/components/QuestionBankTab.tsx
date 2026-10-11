@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PRELOADED_QUESTIONS, CBSE_SUBJECTS } from '../data/cbseData';
 import { Question, QuestionType, DifficultyLevel, QuestionBankSet } from '../types';
+import { sanitizeQuestionOptions, sanitizeQuestion } from '../utils/questionVault';
 import { fetchQuestionBankSets } from '../utils/questionBankService';
 import { 
   Search, 
@@ -286,10 +287,10 @@ export const QuestionBankTab: React.FC<QuestionBankTabProps> = ({
     return (
       <div
         key={q.id}
-        className={`bg-white dark:bg-stone-900 rounded-2xl p-5 border transition-all space-y-3 relative ${
+        className={`edtech-card qb-card rounded-2xl p-5 border transition-all space-y-3 relative ${
           inCart 
             ? 'border-emerald-600 dark:border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-md ring-1 ring-emerald-500/30' 
-            : 'border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 shadow-xs'
+            : 'border-stone-200 dark:border-stone-800 shadow-xs'
         }`}
       >
         {/* Top Badges Row */}
@@ -348,7 +349,7 @@ export const QuestionBankTab: React.FC<QuestionBankTabProps> = ({
         </div>
 
         {/* Case Study Passage */}
-        {q.casePassage && (
+        {q.casePassage && q.casePassage.trim().length > 5 && !['n/a', 'na', 'none', '-'].includes(q.casePassage.trim().toLowerCase()) && (
           <div className="case-study-container bg-amber-50/90 dark:bg-amber-950/30 p-3.5 rounded-xl border border-amber-300/70 dark:border-amber-800/60 my-2">
             <div className="flex items-center gap-1.5 text-amber-950 dark:text-amber-200 font-black text-xs uppercase tracking-wider mb-1.5 border-b border-amber-200/60 dark:border-amber-800 pb-1">
               <FileText className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
@@ -361,23 +362,28 @@ export const QuestionBankTab: React.FC<QuestionBankTabProps> = ({
         )}
 
         {/* Question Text */}
-        <div className="space-y-2">
-          <p className="text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 whitespace-pre-line leading-relaxed">
-            <span className="text-stone-400 mr-2 font-mono">Q{index + 1}.</span>
-            {q.questionText}
-          </p>
+        {(() => {
+          const sq = sanitizeQuestion(q);
+          return (
+            <div className="space-y-2">
+              <p className="text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 whitespace-pre-line leading-relaxed">
+                <span className="text-stone-400 mr-2 font-mono">Q{index + 1}.</span>
+                {sq.questionText}
+              </p>
 
-          {/* Options for MCQs */}
-          {q.options && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-medium text-stone-800 dark:text-stone-200 pt-1 pl-4">
-              {q.options.map((opt, idx) => (
-                <div key={`opt-${q.id}-${idx}`} className="bg-stone-50 dark:bg-stone-800/80 p-2 rounded-lg border border-stone-200/60 dark:border-stone-700">
-                  {opt}
+              {/* Options for MCQs */}
+              {sq.options && sq.options.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-medium text-stone-800 dark:text-stone-200 pt-1 pl-4">
+                  {sq.options.map((opt, idx) => (
+                    <div key={`opt-${q.id}-${idx}`} className="bg-stone-50 dark:bg-stone-800/80 p-2 rounded-lg border border-stone-200/60 dark:border-stone-700">
+                      {opt}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
 
         {/* Solution Toggle & Box */}
         <div className="pt-2 border-t border-stone-100 dark:border-stone-800/80">
